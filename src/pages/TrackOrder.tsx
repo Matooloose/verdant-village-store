@@ -152,7 +152,7 @@ const TrackOrder = () => {
                   
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Total:</span>
-                    <span className="font-semibold">${order.total.toFixed(2)}</span>
+                    <span className="font-semibold">R{order.total.toFixed(2)}</span>
                   </div>
                   
                   <div className="flex justify-between text-sm">

@@ -210,7 +210,7 @@ const Home = () => {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="font-semibold text-primary">
-                              ${product.price}/{product.unit}
+                              R{product.price}/{product.unit}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {product.quantity} {product.unit} available

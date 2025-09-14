@@ -276,11 +276,11 @@ const Checkout = () => {
                 <div>
                   <p className="font-medium">{item.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {item.quantity} {item.unit} × ${item.price.toFixed(2)}
+                    {item.quantity} {item.unit} × R{item.price.toFixed(2)}
                   </p>
                 </div>
                 <p className="font-medium">
-                  ${(item.price * item.quantity).toFixed(2)}
+                  R{(item.price * item.quantity).toFixed(2)}
                 </p>
               </div>
             ))}
@@ -290,16 +290,16 @@ const Checkout = () => {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Subtotal:</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>R{subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span>Delivery Fee:</span>
-                <span>${deliveryFee.toFixed(2)}</span>
+                <span>R{deliveryFee.toFixed(2)}</span>
               </div>
               <Separator />
               <div className="flex justify-between font-semibold">
                 <span>Total:</span>
-                <span>${total.toFixed(2)}</span>
+                <span>R{total.toFixed(2)}</span>
               </div>
             </div>
           </CardContent>
@@ -321,7 +321,7 @@ const Checkout = () => {
           ) : (
             <div className="flex items-center space-x-2">
               <CheckCircle className="h-5 w-5" />
-              <span>Place Order - ${total.toFixed(2)}</span>
+              <span>Place Order - R{total.toFixed(2)}</span>
             </div>
           )}
         </Button>

@@ -4,11 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MapPin, Leaf, Users, ShoppingBag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useStatusBar } from "@/hooks/useStatusBar";
 
 const Welcome = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [locationPermission, setLocationPermission] = useState<'pending' | 'granted' | 'denied'>('pending');
+  
+  useStatusBar();
 
   const requestLocation = async () => {
     if (!navigator.geolocation) {
