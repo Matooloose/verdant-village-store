@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,63 +7,101 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
-import { 
-  ArrowLeft,
-  MapPin,
-  CreditCard,
-  Smartphone,
-  Shield,
-  CheckCircle
-} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, MapPin, CreditCard, Banknote, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useCart } from "@/contexts/CartContext";
+import { useAppState } from "@/contexts/AppStateContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
-interface CartItem {
-  id: string;
+interface UserProfile {
   name: string;
-  price: number;
-  quantity: number;
-  unit: string;
+  address: string;
+  phone: string;
 }
 
 const Checkout = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [paymentMethod, setPaymentMethod] = useState("card");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const { cartItems, getTotalPrice, clearCart } = useCart();
+  const { checkoutData, updateCheckoutData, addNotification } = useAppState();
+  const { user } = useAuth();
+  
+  const [userProfile, setUserProfile] = useState<UserProfile>({ name: '', address: '', phone: '' });
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    postalCode: "",
-    specialInstructions: ""
+    fullName: checkoutData.address ? checkoutData.address.split('\n')[0] : "",
+    phoneNumber: "",
+    address: checkoutData.address || "",
+    instructions: ""
   });
-
-  // Mock cart items
-  const cartItems: CartItem[] = [
-    { id: "1", name: "Fresh Organic Tomatoes", price: 4.99, quantity: 2, unit: "kg" },
-    { id: "2", name: "Sweet Corn", price: 3.50, quantity: 1, unit: "kg" }
-  ];
-
-  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const deliveryFee = 2.99;
+  
+  const [selectedPayment, setSelectedPayment] = useState(checkoutData.paymentMethod || "cash");
+  const [bankingDetails, setBankingDetails] = useState(checkoutData.bankingDetails || "");
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Delivery fee set by farmer - for demo, using fixed value
+  const deliveryFee = checkoutData.deliveryFee || 20;
+  const subtotal = getTotalPrice();
   const total = subtotal + deliveryFee;
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  useEffect(() => {
+    if (cartItems.length === 0) {
+      navigate('/home');
+      return;
+    }
+    
+    fetchUserProfile();
+  }, [cartItems.length, navigate]);
+
+  const fetchUserProfile = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('name, address, phone')
+        .eq('id', user.id)
+        .single();
+
+      if (data) {
+        setUserProfile(data);
+        if (data.address && !formData.address) {
+          setFormData(prev => ({
+            ...prev,
+            fullName: data.name || "",
+            phoneNumber: data.phone || "",
+            address: data.address || ""
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    }
+  };
+
+  const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [field]: value
     }));
   };
 
   const handlePlaceOrder = async () => {
-    // Validation
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.address) {
+    // Validate required fields
+    if (!formData.fullName || !formData.phoneNumber || !formData.address) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required delivery information",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedPayment !== "cash" && !bankingDetails) {
+      toast({
+        title: "Missing Payment Details",
+        description: "Please provide your banking details for this payment method",
         variant: "destructive",
       });
       return;
@@ -71,259 +109,273 @@ const Checkout = () => {
 
     setIsProcessing(true);
 
-    // Simulate order processing
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      // Save checkout data
+      updateCheckoutData({
+        address: formData.address,
+        paymentMethod: selectedPayment,
+        bankingDetails,
+        deliveryFee
+      });
+
+      // Create order in database
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user?.id,
+          total,
+          status: 'pending',
+          payment_status: 'pending',
+          payment_method: selectedPayment,
+          shipping_address: formData.address
+        })
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // Create order items
+      const orderItems = cartItems.map(item => ({
+        order_id: orderData.id,
+        product_id: item.id,
+        quantity: item.quantity,
+        unit_price: item.price
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (itemsError) throw itemsError;
+
+      // Add success notification
+      addNotification({
+        title: "Order Placed Successfully!",
+        message: `Your order #${orderData.id.slice(0, 8)} has been placed and is being processed.`,
+        type: "order",
+        read: false
+      });
+
+      // Clear cart
+      clearCart();
+
       toast({
         title: "Order Placed Successfully!",
-        description: "You'll receive a confirmation email shortly",
+        description: "You will receive updates about your order status",
       });
-      navigate('/track-order');
-    }, 2000);
+
+      // Navigate to track order
+      navigate(`/track-order?orderId=${orderData.id}`);
+
+    } catch (error) {
+      console.error('Error placing order:', error);
+      toast({
+        title: "Error",
+        description: "Failed to place order. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
+
+  if (cartItems.length === 0) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-card border-b shadow-soft">
-        <div className="flex items-center justify-between p-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+        <div className="p-4 flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/cart')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="text-center">
-            <h1 className="text-lg font-semibold text-foreground">Checkout</h1>
-            <p className="text-sm text-muted-foreground">Complete your order</p>
-          </div>
-          <div className="w-9" />
+          <h1 className="text-lg font-semibold text-foreground">Checkout</h1>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="p-4 pb-32 space-y-6">
+      <main className="p-4 pb-24 space-y-6">
         {/* Delivery Address */}
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center text-lg">
-              <MapPin className="h-5 w-5 mr-2 text-primary" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <MapPin className="h-5 w-5" />
               Delivery Address
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name *</Label>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <Label htmlFor="fullName" className="text-foreground">Full Name *</Label>
                 <Input
-                  id="firstName"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
-                  required
+                  id="fullName"
+                  value={formData.fullName}
+                  onChange={(e) => handleInputChange('fullName', e.target.value)}
+                  placeholder="Enter your full name"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name *</Label>
+              
+              <div>
+                <Label htmlFor="phoneNumber" className="text-foreground">Phone Number *</Label>
                 <Input
-                  id="lastName"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
-                  required
+                  id="phoneNumber"
+                  value={formData.phoneNumber}
+                  onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+                  placeholder="Enter your phone number"
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                name="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={handleInputChange}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="address">Street Address *</Label>
-              <Input
-                id="address"
-                name="address"
-                value={formData.address}
-                onChange={handleInputChange}
-                placeholder="123 Main Street"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="city">City *</Label>
-                <Input
-                  id="city"
-                  name="city"
-                  value={formData.city}
-                  onChange={handleInputChange}
-                  required
+              
+              <div>
+                <Label htmlFor="address" className="text-foreground">Complete Address *</Label>
+                <Textarea
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => handleInputChange('address', e.target.value)}
+                  placeholder="Enter your complete delivery address"
+                  rows={3}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="postalCode">Postal Code</Label>
-                <Input
-                  id="postalCode"
-                  name="postalCode"
-                  value={formData.postalCode}
-                  onChange={handleInputChange}
+              
+              <div>
+                <Label htmlFor="instructions" className="text-foreground">Special Instructions</Label>
+                <Textarea
+                  id="instructions"
+                  value={formData.instructions}
+                  onChange={(e) => handleInputChange('instructions', e.target.value)}
+                  placeholder="Any special delivery instructions (optional)"
+                  rows={2}
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="specialInstructions">Special Instructions</Label>
-              <Textarea
-                id="specialInstructions"
-                name="specialInstructions"
-                value={formData.specialInstructions}
-                onChange={handleInputChange}
-                placeholder="Any special delivery instructions..."
-                rows={3}
-              />
-            </div>
+            {!userProfile.address && (
+              <div className="p-3 bg-warning/10 border border-warning/20 rounded-lg">
+                <p className="text-sm text-warning-foreground">
+                  💡 Add this address to your profile for faster checkout next time
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Payment Method */}
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center text-lg">
-              <CreditCard className="h-5 w-5 mr-2 text-primary" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <CreditCard className="h-5 w-5" />
               Payment Method
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
-              <div className="flex items-center space-x-3 p-3 border rounded-lg">
-                <RadioGroupItem value="card" id="card" />
-                <CreditCard className="h-5 w-5 text-primary" />
-                <div className="flex-1">
-                  <Label htmlFor="card" className="font-medium">Credit/Debit Card</Label>
-                  <p className="text-sm text-muted-foreground">Visa, Mastercard, Amex</p>
+            <RadioGroup value={selectedPayment} onValueChange={setSelectedPayment}>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3 p-3 border rounded-lg">
+                  <RadioGroupItem value="cash" id="cash" />
+                  <Label htmlFor="cash" className="flex items-center gap-2 cursor-pointer flex-1">
+                    <Banknote className="h-5 w-5 text-success" />
+                    <div>
+                      <p className="font-medium text-foreground">Cash on Delivery</p>
+                      <p className="text-sm text-muted-foreground">Pay when you receive your order</p>
+                    </div>
+                  </Label>
                 </div>
-              </div>
 
-              <div className="flex items-center space-x-3 p-3 border rounded-lg">
-                <RadioGroupItem value="paypal" id="paypal" />
-                <div className="h-5 w-5 bg-blue-600 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">P</span>
+                <div className="flex items-center space-x-3 p-3 border rounded-lg">
+                  <RadioGroupItem value="card" id="card" />
+                  <Label htmlFor="card" className="flex items-center gap-2 cursor-pointer flex-1">
+                    <CreditCard className="h-5 w-5 text-info" />
+                    <div>
+                      <p className="font-medium text-foreground">Bank Transfer</p>
+                      <p className="text-sm text-muted-foreground">Transfer to farmer's bank account</p>
+                    </div>
+                  </Label>
                 </div>
-                <div className="flex-1">
-                  <Label htmlFor="paypal" className="font-medium">PayPal</Label>
-                  <p className="text-sm text-muted-foreground">Pay with your PayPal account</p>
-                </div>
-              </div>
 
-              <div className="flex items-center space-x-3 p-3 border rounded-lg">
-                <RadioGroupItem value="stripe" id="stripe" />
-                <div className="h-5 w-5 bg-purple-600 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">S</span>
-                </div>
-                <div className="flex-1">
-                  <Label htmlFor="stripe" className="font-medium">Stripe</Label>
-                  <p className="text-sm text-muted-foreground">Secure payment processing</p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3 p-3 border rounded-lg">
-                <RadioGroupItem value="mobile" id="mobile" />
-                <Smartphone className="h-5 w-5 text-primary" />
-                <div className="flex-1">
-                  <Label htmlFor="mobile" className="font-medium">Mobile Payment</Label>
-                  <p className="text-sm text-muted-foreground">Apple Pay, Google Pay</p>
+                <div className="flex items-center space-x-3 p-3 border rounded-lg">
+                  <RadioGroupItem value="mobile" id="mobile" />
+                  <Label htmlFor="mobile" className="flex items-center gap-2 cursor-pointer flex-1">
+                    <Smartphone className="h-5 w-5 text-warning" />
+                    <div>
+                      <p className="font-medium text-foreground">Mobile Money</p>
+                      <p className="text-sm text-muted-foreground">Pay via mobile wallet</p>
+                    </div>
+                  </Label>
                 </div>
               </div>
             </RadioGroup>
 
-            <div className="mt-4 p-3 bg-muted/30 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <Shield className="h-4 w-4 text-success" />
-                <p className="text-sm text-muted-foreground">
-                  Your payment information is secure and encrypted
-                </p>
+            {selectedPayment !== "cash" && (
+              <div className="mt-4 space-y-3">
+                <Label htmlFor="bankingDetails" className="text-foreground">Banking Details *</Label>
+                <Textarea
+                  id="bankingDetails"
+                  value={bankingDetails}
+                  onChange={(e) => setBankingDetails(e.target.value)}
+                  placeholder={
+                    selectedPayment === "card" 
+                      ? "Enter your bank account details for transfer confirmation"
+                      : "Enter your mobile money number and provider"
+                  }
+                  rows={3}
+                />
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Order Summary */}
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg">Order Summary</CardTitle>
+          <CardHeader>
+            <CardTitle className="text-foreground">Order Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {cartItems.map((item) => (
-              <div key={item.id} className="flex justify-between">
-                <div>
-                  <p className="font-medium">{item.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {item.quantity} {item.unit} × R{item.price.toFixed(2)}
+            <div className="space-y-3">
+              {cartItems.map((item) => (
+                <div key={item.id} className="flex justify-between items-center">
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {item.quantity} {item.unit} × R{item.price}
+                    </p>
+                  </div>
+                  <p className="font-medium text-foreground">
+                    R{(item.price * item.quantity).toFixed(2)}
                   </p>
                 </div>
-                <p className="font-medium">
-                  R{(item.price * item.quantity).toFixed(2)}
-                </p>
-              </div>
-            ))}
-            
+              ))}
+            </div>
+
             <Separator />
-            
+
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Subtotal:</span>
-                <span>R{subtotal.toFixed(2)}</span>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="text-foreground">R{subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span>Delivery Fee:</span>
-                <span>R{deliveryFee.toFixed(2)}</span>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Delivery Fee</span>
+                <span className="text-foreground">R{deliveryFee.toFixed(2)}</span>
               </div>
               <Separator />
-              <div className="flex justify-between font-semibold">
-                <span>Total:</span>
-                <span>R{total.toFixed(2)}</span>
+              <div className="flex justify-between text-lg font-semibold">
+                <span className="text-foreground">Total</span>
+                <span className="text-primary">R{total.toFixed(2)}</span>
               </div>
             </div>
           </CardContent>
         </Card>
       </main>
 
-      {/* Bottom Order Button */}
+      {/* Fixed Bottom Button */}
       <div className="fixed bottom-0 left-0 right-0 bg-card border-t shadow-strong p-4">
         <Button 
-          className="w-full h-12 bg-gradient-to-r from-primary to-primary-light text-lg font-semibold"
           onClick={handlePlaceOrder}
           disabled={isProcessing}
+          className="w-full"
+          size="lg"
         >
-          {isProcessing ? (
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Processing...</span>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-2">
-              <CheckCircle className="h-5 w-5" />
-              <span>Place Order - R{total.toFixed(2)}</span>
-            </div>
-          )}
+          {isProcessing ? 'Processing...' : `Place Order - R${total.toFixed(2)}`}
         </Button>
       </div>
     </div>

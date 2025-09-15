@@ -5,9 +5,11 @@ import { Card } from "@/components/ui/card";
 import { MapPin, Leaf, Users, ShoppingBag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useStatusBar } from "@/hooks/useStatusBar";
+import { useAppState } from "@/contexts/AppStateContext";
 
 const Welcome = () => {
   const navigate = useNavigate();
+  const { setHasCompletedWelcome } = useAppState();
   const { toast } = useToast();
   const [locationPermission, setLocationPermission] = useState<'pending' | 'granted' | 'denied'>('pending');
   
@@ -48,6 +50,7 @@ const Welcome = () => {
   };
 
   const continueToApp = () => {
+    setHasCompletedWelcome(true);
     navigate('/login');
   };
 

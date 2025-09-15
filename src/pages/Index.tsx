@@ -1,13 +1,24 @@
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAppState } from "@/contexts/AppStateContext";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { hasCompletedWelcome } = useAppState();
 
   useEffect(() => {
-    // Redirect to welcome page
-    navigate('/welcome');
-  }, [navigate]);
+    if (user) {
+      if (hasCompletedWelcome) {
+        navigate('/home');
+      } else {
+        navigate('/welcome');
+      }
+    }
+  }, [user, hasCompletedWelcome, navigate]);
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">

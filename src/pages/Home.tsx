@@ -18,6 +18,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
+import { NotificationIcon } from "@/components/NotificationIcon";
 
 interface Product {
   id: string;
@@ -116,7 +117,6 @@ const Home = () => {
     { icon: HomeIcon, label: "Home", path: "/home", active: true },
     { icon: ShoppingCart, label: "Cart", path: "/cart" },
     { icon: Package, label: "Track", path: "/track-order" },
-    { icon: MessageCircle, label: "Messages", path: "/messages" },
     { icon: Search, label: "Browse", path: "/browse-products" },
   ];
 
@@ -133,9 +133,7 @@ const Home = () => {
                 <span>Your Location</span>
               </div>
             </div>
-            <Button variant="ghost" size="sm">
-              <Filter className="h-5 w-5" />
-            </Button>
+            <NotificationIcon />
           </div>
 
           {/* Search Bar */}
