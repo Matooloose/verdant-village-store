@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useCart } from "@/contexts/CartContext";
 
 interface Product {
   id: string;
@@ -36,6 +37,7 @@ interface Product {
 const BrowseProducts = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { addToCart } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -77,11 +79,24 @@ const BrowseProducts = () => {
     }
   };
 
-  const addToCart = async (productId: string) => {
-    toast({
-      title: "Added to Cart",
-      description: "Product has been added to your cart",
-    });
+  const addProductToCart = async (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (product) {
+      addToCart({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        unit: product.unit,
+        image: product.images[0],
+        farmName: 'Local Farm',
+        category: product.category
+      });
+      
+      toast({
+        title: "Added to Cart",
+        description: `${product.name} has been added to your cart`,
+      });
+    }
   };
 
   const filteredProducts = products.filter(product => {
@@ -217,7 +232,7 @@ const BrowseProducts = () => {
                           <Button 
                             size="sm" 
                             className="h-8 w-8 p-0"
-                            onClick={() => addToCart(product.id)}
+                            onClick={() => addProductToCart(product.id)}
                           >
                             <Plus className="h-4 w-4" />
                           </Button>
@@ -263,7 +278,7 @@ const BrowseProducts = () => {
                           </div>
                           <Button 
                             size="sm"
-                            onClick={() => addToCart(product.id)}
+                            onClick={() => addProductToCart(product.id)}
                           >
                             <Plus className="h-4 w-4 mr-1" />
                             Add to Cart

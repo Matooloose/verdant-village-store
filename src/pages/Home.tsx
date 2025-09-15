@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useCart } from "@/contexts/CartContext";
 
 interface Product {
   id: string;
@@ -44,6 +45,7 @@ interface Farm {
 const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { addToCart } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -85,12 +87,24 @@ const Home = () => {
     }
   };
 
-  const addToCart = async (productId: string) => {
-    // This would typically add to a cart state or database
-    toast({
-      title: "Added to Cart",
-      description: "Product has been added to your cart",
-    });
+  const addProductToCart = async (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (product) {
+      addToCart({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        unit: product.unit,
+        image: product.images[0],
+        farmName: 'Local Farm',
+        category: product.category
+      });
+      
+      toast({
+        title: "Added to Cart",
+        description: `${product.name} has been added to your cart`,
+      });
+    }
   };
 
   const filteredProducts = products.filter(product =>
@@ -219,7 +233,7 @@ const Home = () => {
                           <Button 
                             size="sm" 
                             className="h-8 w-8 p-0"
-                            onClick={() => addToCart(product.id)}
+                            onClick={() => addProductToCart(product.id)}
                           >
                             <Plus className="h-4 w-4" />
                           </Button>

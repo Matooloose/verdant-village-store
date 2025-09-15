@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useCart } from "@/contexts/CartContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,61 +16,9 @@ import {
   Search
 } from "lucide-react";
 
-interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  unit: string;
-  quantity: number;
-  image?: string;
-  farmName: string;
-}
-
 const Cart = () => {
   const navigate = useNavigate();
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: "1",
-      name: "Fresh Organic Tomatoes",
-      price: 4.99,
-      unit: "kg",
-      quantity: 2,
-      farmName: "Green Valley Farm"
-    },
-    {
-      id: "2", 
-      name: "Sweet Corn",
-      price: 3.50,
-      unit: "kg",
-      quantity: 1,
-      farmName: "Sunny Acres"
-    }
-  ]);
-
-  const updateQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeItem(id);
-      return;
-    }
-    
-    setCartItems(items =>
-      items.map(item =>
-        item.id === id ? { ...item, quantity: newQuantity } : item
-      )
-    );
-  };
-
-  const removeItem = (id: string) => {
-    setCartItems(items => items.filter(item => item.id !== id));
-  };
-
-  const getTotalPrice = () => {
-    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
-
-  const getTotalItems = () => {
-    return cartItems.reduce((total, item) => total + item.quantity, 0);
-  };
+  const { cartItems, updateQuantity, removeItem, getTotalPrice, getTotalItems } = useCart();
 
   const bottomNavItems = [
     { icon: Home, label: "Home", path: "/home" },
@@ -130,7 +78,7 @@ const Cart = () => {
                     
                     <div className="flex-1 space-y-1">
                       <h3 className="font-semibold text-foreground">{item.name}</h3>
-                      <p className="text-sm text-muted-foreground">{item.farmName}</p>
+                      <p className="text-sm text-muted-foreground">{item.farmName || 'Local Farm'}</p>
                       <p className="font-semibold text-primary">
                         R{item.price.toFixed(2)}/{item.unit}
                       </p>
