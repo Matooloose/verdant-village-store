@@ -22,6 +22,7 @@ import {
   LogOut,
   Leaf
 } from "lucide-react";
+import AvailableFarms from "@/components/AvailableFarms";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -157,6 +158,9 @@ const Dashboard = () => {
           </CardHeader>
         </Card>
 
+        {/* Available Farms */}
+        <AvailableFarms />
+
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-4">
           <Card className="cursor-pointer hover:shadow-medium transition-shadow" onClick={() => handleNavigation('/home')}>
@@ -180,10 +184,10 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="cursor-pointer hover:shadow-medium transition-shadow" onClick={() => handleNavigation('/messages')}>
+          <Card className="cursor-pointer hover:shadow-medium transition-shadow" onClick={() => handleNavigation('/subscriptions')}>
             <CardContent className="p-4 text-center">
               <MessageCircle className="h-8 w-8 mx-auto mb-2 text-primary" />
-              <p className="font-medium">Messages</p>
+              <p className="font-medium">Chat & Support</p>
             </CardContent>
           </Card>
         </div>

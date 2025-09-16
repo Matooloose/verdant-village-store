@@ -1,304 +1,242 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { 
-  ArrowLeft,
-  Send,
-  Home,
-  ShoppingCart,
-  Package,
-  MessageCircle,
-  Search,
-  Shield,
-  User
-} from "lucide-react";
-import { format } from "date-fns";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ArrowLeft, Send, Lock, MessageCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Message {
   id: string;
-  senderId: string;
-  senderName: string;
-  senderType: 'admin' | 'farmer' | 'buyer';
   message: string;
-  timestamp: Date;
-  isRead: boolean;
-}
-
-interface Chat {
-  id: string;
-  participantId: string;
-  participantName: string;
-  participantType: 'admin' | 'farmer';
-  lastMessage: string;
-  lastMessageTime: Date;
-  unreadCount: number;
+  sender_id: string;
+  receiver_id: string;
+  created_at: string;
+  is_read: boolean;
 }
 
 const Messages = () => {
   const navigate = useNavigate();
-  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [hasSubscription, setHasSubscription] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [chats] = useState<Chat[]>([
-    {
-      id: "1",
-      participantId: "admin",
-      participantName: "FarmersBracket",
-      participantType: "admin",
-      lastMessage: "Welcome to FarmersBracket! How can we help you today?",
-      lastMessageTime: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-      unreadCount: 1
-    },
-    {
-      id: "2", 
-      participantId: "farmer1",
-      participantName: "Green Valley Farm",
-      participantType: "farmer",
-      lastMessage: "Your order has been prepared and is ready for pickup",
-      lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-      unreadCount: 0
-    },
-    {
-      id: "3",
-      participantId: "farmer2", 
-      participantName: "Sunny Acres",
-      participantType: "farmer",
-      lastMessage: "Thank you for your order! We'll have it ready by tomorrow",
-      lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-      unreadCount: 2
+  const [adminId, setAdminId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      checkSubscription();
+      fetchAdminId();
     }
-  ]);
+  }, [user]);
 
-  const [messages] = useState<Message[]>([
-    {
-      id: "1",
-      senderId: "admin",
-      senderName: "FarmersBracket",
-      senderType: "admin",
-      message: "Welcome to FarmersBracket! How can we help you today?",
-      timestamp: new Date(Date.now() - 1000 * 60 * 30),
-      isRead: false
-    },
-    {
-      id: "2",
-      senderId: "farmer1",
-      senderName: "Green Valley Farm", 
-      senderType: "farmer",
-      message: "Your order has been prepared and is ready for pickup",
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-      isRead: true
+  useEffect(() => {
+    if (hasSubscription && adminId) {
+      fetchMessages();
     }
-  ]);
+  }, [hasSubscription, adminId]);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedChat) return;
-    
-    // Here you would send the message to the backend
-    setNewMessage("");
+  const checkSubscription = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .rpc('has_active_subscription', { _user_id: user.id });
+
+      if (error) throw error;
+      setHasSubscription(data);
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getSenderDisplayName = (senderType: string, senderName: string) => {
-    return senderType === 'admin' ? 'FarmersBracket' : senderName;
+  const fetchAdminId = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'admin')
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      setAdminId(data?.user_id || null);
+    } catch (error) {
+      console.error('Error fetching admin:', error);
+    }
   };
 
-  const getParticipantIcon = (type: 'admin' | 'farmer') => {
-    return type === 'admin' ? Shield : User;
+  const fetchMessages = async () => {
+    if (!user || !adminId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('chats')
+        .select('*')
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${adminId}),and(sender_id.eq.${adminId},receiver_id.eq.${user.id})`)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setMessages(data || []);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
   };
 
-  const bottomNavItems = [
-    { icon: Home, label: "Home", path: "/home" },
-    { icon: ShoppingCart, label: "Cart", path: "/cart" },
-    { icon: Package, label: "Track", path: "/track-order" },
-    { icon: MessageCircle, label: "Messages", path: "/messages", active: true },
-    { icon: Search, label: "Browse", path: "/browse-products" },
-  ];
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !user || !adminId) return;
 
-  if (selectedChat) {
-    const chat = chats.find(c => c.id === selectedChat);
-    const chatMessages = messages.filter(m => 
-      m.senderId === chat?.participantId || m.senderId === "current-user"
-    );
+    try {
+      const { error } = await supabase
+        .from('chats')
+        .insert({
+          sender_id: user.id,
+          receiver_id: adminId,
+          message: newMessage.trim()
+        });
 
+      if (error) throw error;
+
+      setNewMessage("");
+      fetchMessages();
+      
+      toast({
+        title: "Message sent!",
+        description: "Your message has been sent to the admin.",
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        {/* Chat Header */}
-        <header className="sticky top-0 z-50 bg-card border-b shadow-soft">
-          <div className="flex items-center justify-between p-4">
-            <Button variant="ghost" size="sm" onClick={() => setSelectedChat(null)}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center space-x-3">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary/10">
-                  {chat?.participantType === 'admin' ? (
-                    <Shield className="h-4 w-4 text-primary" />
-                  ) : (
-                    <User className="h-4 w-4 text-primary" />
-                  )}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <h1 className="font-semibold text-foreground">
-                  {getSenderDisplayName(chat?.participantType || 'farmer', chat?.participantName || '')}
-                </h1>
-                <p className="text-xs text-muted-foreground">Online</p>
-              </div>
-            </div>
-            <div className="w-9" />
-          </div>
-        </header>
-
-        {/* Messages */}
-        <div className="flex-1 p-4 space-y-4 pb-24">
-          {chatMessages.map((message) => (
-            <div key={message.id} className={`flex ${message.senderId === 'current-user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] p-3 rounded-lg ${
-                message.senderId === 'current-user' 
-                  ? 'bg-primary text-primary-foreground' 
-                  : 'bg-muted'
-              }`}>
-                <p className="text-sm">{message.message}</p>
-                <p className="text-xs opacity-70 mt-1">
-                  {format(message.timestamp, 'HH:mm')}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Message Input */}
-        <div className="sticky bottom-16 bg-card border-t p-4">
-          <div className="flex space-x-2">
-            <Input
-              placeholder="Type a message..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-              className="flex-1"
-            />
-            <Button onClick={handleSendMessage} className="px-4">
-              <Send className="h-4 w-4" />
+      <div className="min-h-screen bg-background p-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center mb-6">
+            <Button variant="ghost" onClick={() => navigate('/dashboard')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
             </Button>
           </div>
+          <div className="text-center">Checking subscription status...</div>
         </div>
+      </div>
+    );
+  }
 
-        {/* Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-card border-t shadow-strong">
-          <div className="flex items-center justify-around py-2">
-            {bottomNavItems.map((item) => (
-              <Button
-                key={item.path}
-                variant="ghost"
-                size="sm"
-                className={`flex flex-col items-center px-3 py-2 h-auto ${
-                  item.active ? 'text-primary' : ''
-                }`}
-                onClick={() => navigate(item.path)}
-              >
-                <item.icon className="h-5 w-5 mb-1" />
-                <span className="text-xs">{item.label}</span>
+  if (!hasSubscription) {
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center mb-6">
+            <Button variant="ghost" onClick={() => navigate('/dashboard')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+          </div>
+
+          <Card className="text-center">
+            <CardHeader>
+              <div className="mx-auto mb-4 p-4 bg-muted rounded-full w-fit">
+                <Lock className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <CardTitle>Subscription Required</CardTitle>
+              <CardDescription>
+                You need an active subscription to access chat features and communicate with farmers and admin.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => navigate('/subscriptions')} className="w-full">
+                <MessageCircle className="h-4 w-4 mr-2" />
+                View Subscription Plans
               </Button>
-            ))}
-          </div>
-        </nav>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b shadow-soft">
-        <div className="flex items-center justify-between p-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
+    <div className="min-h-screen bg-background p-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <Button variant="ghost" onClick={() => navigate('/dashboard')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
           </Button>
-          <div className="text-center">
-            <h1 className="text-lg font-semibold text-foreground">Messages</h1>
-            <p className="text-sm text-muted-foreground">{chats.length} conversations</p>
-          </div>
-          <div className="w-9" />
+          <h1 className="text-xl font-semibold">Chat with Admin</h1>
+          <div></div>
         </div>
-      </header>
 
-      {/* Chat List */}
-      <main className="p-4 pb-20">
-        {chats.length === 0 ? (
-          <div className="text-center py-16">
-            <MessageCircle className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-xl font-semibold text-foreground mb-2">No messages yet</h2>
-            <p className="text-muted-foreground">Start a conversation with farmers or support</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {chats.map((chat) => {
-              const ParticipantIcon = getParticipantIcon(chat.participantType);
-              
-              return (
-                <Card 
-                  key={chat.id} 
-                  className="cursor-pointer hover:shadow-medium transition-shadow"
-                  onClick={() => setSelectedChat(chat.id)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-3">
-                      <Avatar className="h-12 w-12">
-                        <AvatarFallback className="bg-primary/10">
-                          <ParticipantIcon className="h-5 w-5 text-primary" />
-                        </AvatarFallback>
-                      </Avatar>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-foreground truncate">
-                            {getSenderDisplayName(chat.participantType, chat.participantName)}
-                          </h3>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs text-muted-foreground">
-                              {format(chat.lastMessageTime, 'HH:mm')}
-                            </span>
-                            {chat.unreadCount > 0 && (
-                              <Badge className="bg-primary text-primary-foreground min-w-[20px] h-5 text-xs">
-                                {chat.unreadCount}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground truncate mt-1">
-                          {chat.lastMessage}
+        {/* Messages */}
+        <Card className="h-[600px] flex flex-col">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg">Support Chat</CardTitle>
+            <CardDescription>Get help from our admin team</CardDescription>
+          </CardHeader>
+
+          <CardContent className="flex-1 flex flex-col">
+            <ScrollArea className="flex-1 mb-4 pr-4">
+              <div className="space-y-4">
+                {messages.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    No messages yet. Start a conversation!
+                  </div>
+                ) : (
+                  messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[80%] p-3 rounded-lg ${
+                          message.sender_id === user?.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        }`}
+                      >
+                        <p className="text-sm">{message.message}</p>
+                        <p className="text-xs opacity-70 mt-1">
+                          {new Date(message.created_at).toLocaleTimeString()}
                         </p>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </main>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t shadow-strong">
-        <div className="flex items-center justify-around py-2">
-          {bottomNavItems.map((item) => (
-            <Button
-              key={item.path}
-              variant="ghost"
-              size="sm"
-              className={`flex flex-col items-center px-3 py-2 h-auto ${
-                item.active ? 'text-primary' : ''
-              }`}
-              onClick={() => navigate(item.path)}
-            >
-              <item.icon className="h-5 w-5 mb-1" />
-              <span className="text-xs">{item.label}</span>
-            </Button>
-          ))}
-        </div>
-      </nav>
+            {/* Message Input */}
+            <div className="flex space-x-2">
+              <Input
+                placeholder="Type your message..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                className="flex-1"
+              />
+              <Button onClick={sendMessage} disabled={!newMessage.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
