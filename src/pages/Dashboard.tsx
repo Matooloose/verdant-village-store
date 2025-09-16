@@ -25,7 +25,6 @@ import {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
   const { signOut, user } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
