@@ -16,7 +16,7 @@ import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import Cart from "./pages/Cart";
 import TrackOrder from "./pages/TrackOrder";
-import Messages from "./pages/Messages";
+
 import BrowseProducts from "./pages/BrowseProducts";
 import Checkout from "./pages/Checkout";
 import UpdateProfile from "./pages/UpdateProfile";

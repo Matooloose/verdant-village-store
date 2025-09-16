@@ -114,7 +114,7 @@ const BrowseProducts = () => {
     { icon: Home, label: "Home", path: "/home" },
     { icon: ShoppingCart, label: "Cart", path: "/cart" },
     { icon: Package, label: "Track", path: "/track-order" },
-    { icon: MessageCircle, label: "Messages", path: "/messages" },
+    
     { icon: Search, label: "Browse", path: "/browse-products", active: true },
   ];
 
