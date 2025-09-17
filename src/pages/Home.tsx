@@ -91,13 +91,29 @@ const Home = () => {
   const addProductToCart = async (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (product) {
+      // Get farm name from database
+      let farmName = 'Local Farm';
+      try {
+        const { data: farm } = await supabase
+          .from('farms')
+          .select('name')
+          .eq('farmer_id', product.farmer_id)
+          .single();
+        
+        if (farm) {
+          farmName = farm.name;
+        }
+      } catch (error) {
+        console.error('Error fetching farm name:', error);
+      }
+
       addToCart({
         id: product.id,
         name: product.name,
         price: product.price,
         unit: product.unit,
         image: product.images[0],
-        farmName: 'Local Farm',
+        farmName,
         category: product.category
       });
       
