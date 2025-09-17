@@ -16,6 +16,7 @@ import {
   Grid3X3,
   List
 } from "lucide-react";
+import FilterDialog from "@/components/FilterDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
@@ -43,6 +44,12 @@ const BrowseProducts = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    priceRange: [0, 100],
+    organicOnly: false,
+    featuredOnly: false,
+    categories: [] as string[]
+  });
 
   const categories = [
     "all",
@@ -107,7 +114,14 @@ const BrowseProducts = () => {
     const matchesCategory = selectedCategory === "all" || 
       product.category.toLowerCase() === selectedCategory.toLowerCase();
     
-    return matchesSearch && matchesCategory;
+    const matchesPrice = product.price >= filters.priceRange[0] && product.price <= filters.priceRange[1];
+    const matchesOrganic = !filters.organicOnly || product.is_organic;
+    const matchesFeatured = !filters.featuredOnly || product.is_featured;
+    const matchesFilterCategories = filters.categories.length === 0 || 
+      filters.categories.includes(product.category.toLowerCase());
+    
+    return matchesSearch && matchesCategory && matchesPrice && matchesOrganic && 
+           matchesFeatured && matchesFilterCategories;
   });
 
   const bottomNavItems = [
@@ -136,9 +150,7 @@ const BrowseProducts = () => {
               >
                 {viewMode === 'grid' ? <List className="h-5 w-5" /> : <Grid3X3 className="h-5 w-5" />}
               </Button>
-              <Button variant="ghost" size="sm">
-                <Filter className="h-5 w-5" />
-              </Button>
+              <FilterDialog onFiltersChange={setFilters} />
             </div>
           </div>
 

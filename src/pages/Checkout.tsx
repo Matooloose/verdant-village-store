@@ -14,6 +14,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useAppState } from "@/contexts/AppStateContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import PaymentMethodDialog from "@/components/PaymentMethodDialog";
 
 interface UserProfile {
   name: string;
@@ -127,6 +128,7 @@ const Checkout = () => {
           status: 'pending',
           payment_status: 'pending',
           payment_method: selectedPayment,
+          payment_method_selected: selectedPayment,
           shipping_address: formData.address
         })
         .select()
@@ -369,14 +371,21 @@ const Checkout = () => {
 
       {/* Fixed Bottom Button */}
       <div className="fixed bottom-0 left-0 right-0 bg-card border-t shadow-strong p-4">
-        <Button 
-          onClick={handlePlaceOrder}
-          disabled={isProcessing}
-          className="w-full"
-          size="lg"
-        >
-          {isProcessing ? 'Processing...' : `Place Order - R${total.toFixed(2)}`}
-        </Button>
+        <PaymentMethodDialog
+          onPaymentMethodSelect={(method) => {
+            setSelectedPayment(method);
+            handlePlaceOrder();
+          }}
+          trigger={
+            <Button 
+              disabled={isProcessing}
+              className="w-full"
+              size="lg"
+            >
+              {isProcessing ? 'Processing...' : `Place Order - R${total.toFixed(2)}`}
+            </Button>
+          }
+        />
       </div>
     </div>
   );

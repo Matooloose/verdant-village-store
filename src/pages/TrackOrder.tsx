@@ -15,6 +15,7 @@ import {
   Search,
   MapPin
 } from "lucide-react";
+import LiveTrackingDialog from "@/components/LiveTrackingDialog";
 
 interface Order {
   id: string;
@@ -202,10 +203,15 @@ const TrackOrder = () => {
                       View Details
                     </Button>
                     {order.status !== 'delivered' && (
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        Track Live
-                      </Button>
+                      <LiveTrackingDialog 
+                        orderId={order.id}
+                        trigger={
+                          <Button variant="outline" size="sm" className="flex-1">
+                            <MapPin className="h-4 w-4 mr-1" />
+                            Track Live
+                          </Button>
+                        }
+                      />
                     )}
                   </div>
                 </CardContent>
