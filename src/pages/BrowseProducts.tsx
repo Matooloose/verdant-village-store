@@ -16,7 +16,6 @@ import {
   Grid3X3,
   List
 } from "lucide-react";
-import FilterDialog from "@/components/FilterDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
@@ -44,12 +43,6 @@ const BrowseProducts = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    priceRange: [0, 100],
-    organicOnly: false,
-    featuredOnly: false,
-    categories: [] as string[]
-  });
 
   const categories = [
     "all",
@@ -89,29 +82,13 @@ const BrowseProducts = () => {
   const addProductToCart = async (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (product) {
-      // Get farm name from database
-      let farmName = 'Local Farm';
-      try {
-        const { data: farm } = await supabase
-          .from('farms')
-          .select('name')
-          .eq('farmer_id', product.farmer_id)
-          .single();
-        
-        if (farm) {
-          farmName = farm.name;
-        }
-      } catch (error) {
-        console.error('Error fetching farm name:', error);
-      }
-
       addToCart({
         id: product.id,
         name: product.name,
         price: product.price,
         unit: product.unit,
         image: product.images[0],
-        farmName,
+        farmName: 'Local Farm',
         category: product.category
       });
       
@@ -130,14 +107,7 @@ const BrowseProducts = () => {
     const matchesCategory = selectedCategory === "all" || 
       product.category.toLowerCase() === selectedCategory.toLowerCase();
     
-    const matchesPrice = product.price >= filters.priceRange[0] && product.price <= filters.priceRange[1];
-    const matchesOrganic = !filters.organicOnly || product.is_organic;
-    const matchesFeatured = !filters.featuredOnly || product.is_featured;
-    const matchesFilterCategories = filters.categories.length === 0 || 
-      filters.categories.includes(product.category.toLowerCase());
-    
-    return matchesSearch && matchesCategory && matchesPrice && matchesOrganic && 
-           matchesFeatured && matchesFilterCategories;
+    return matchesSearch && matchesCategory;
   });
 
   const bottomNavItems = [
@@ -166,7 +136,9 @@ const BrowseProducts = () => {
               >
                 {viewMode === 'grid' ? <List className="h-5 w-5" /> : <Grid3X3 className="h-5 w-5" />}
               </Button>
-              <FilterDialog onFiltersChange={setFilters} />
+              <Button variant="ghost" size="sm">
+                <Filter className="h-5 w-5" />
+              </Button>
             </div>
           </div>
 

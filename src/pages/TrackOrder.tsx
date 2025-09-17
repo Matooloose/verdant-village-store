@@ -1,8 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,55 +15,50 @@ import {
   Search,
   MapPin
 } from "lucide-react";
-import LiveTrackingDialog from "@/components/LiveTrackingDialog";
 
 interface Order {
   id: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  orderNumber: string;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered';
   total: number;
-  created_at: string;
-  shipping_address: string | null;
-  payment_status: 'pending' | 'completed' | 'failed';
-  payment_method_selected: string | null;
-  user_id: string;
+  items: number;
+  estimatedDelivery: string;
+  farmName: string;
+  trackingId?: string;
 }
 
 const TrackOrder = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (user) {
-      fetchOrders();
+  const [orders] = useState<Order[]>([
+    {
+      id: "1",
+      orderNumber: "FB-2024-001",
+      status: "shipped",
+      total: 28.47,
+      items: 3,
+      estimatedDelivery: "Today, 3:00 PM",
+      farmName: "Green Valley Farm",
+      trackingId: "TRK123456789"
+    },
+    {
+      id: "2",
+      orderNumber: "FB-2024-002",
+      status: "processing",
+      total: 15.99,
+      items: 2,
+      estimatedDelivery: "Tomorrow, 2:00 PM",
+      farmName: "Sunny Acres"
+    },
+    {
+      id: "3",
+      orderNumber: "FB-2024-003",
+      status: "delivered",
+      total: 42.30,
+      items: 5,
+      estimatedDelivery: "Delivered",
+      farmName: "Organic Fields"
     }
-  }, [user]);
-
-  const fetchOrders = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setOrders(data || []);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load orders",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  ]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -124,11 +116,7 @@ const TrackOrder = () => {
 
       {/* Main Content */}
       <main className="p-4 pb-20">
-        {loading ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">Loading your orders...</p>
-          </div>
-        ) : orders.length === 0 ? (
+        {orders.length === 0 ? (
           <div className="text-center py-16">
             <Package className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-xl font-semibold text-foreground mb-2">No orders yet</h2>
@@ -144,10 +132,8 @@ const TrackOrder = () => {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-base">Order #{order.id.slice(0, 8)}</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </p>
+                      <CardTitle className="text-base">{order.orderNumber}</CardTitle>
+                      <p className="text-sm text-muted-foreground">{order.farmName}</p>
                     </div>
                     <Badge className={`${getStatusColor(order.status)} border`}>
                       <div className="flex items-center space-x-1">
@@ -160,28 +146,28 @@ const TrackOrder = () => {
                 
                 <CardContent className="space-y-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Total:</span>
-                    <span className="font-semibold">R{Number(order.total).toFixed(2)}</span>
+                    <span className="text-muted-foreground">Items:</span>
+                    <span>{order.items} item{order.items !== 1 ? 's' : ''}</span>
                   </div>
                   
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Payment Status:</span>
-                    <span className={`capitalize ${order.payment_status === 'completed' ? 'text-success' : 'text-warning'}`}>
-                      {order.payment_status}
+                    <span className="text-muted-foreground">Total:</span>
+                    <span className="font-semibold">R{order.total.toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {order.status === 'delivered' ? 'Status:' : 'Estimated Delivery:'}
+                    </span>
+                    <span className={order.status === 'delivered' ? 'text-success font-medium' : ''}>
+                      {order.estimatedDelivery}
                     </span>
                   </div>
 
-                  {order.payment_method_selected && (
+                  {order.trackingId && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Payment Method:</span>
-                      <span className="font-medium">{order.payment_method_selected}</span>
-                    </div>
-                  )}
-
-                  {order.shipping_address && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Delivery Address:</span>
-                      <span className="text-xs text-right max-w-[200px] truncate">{order.shipping_address}</span>
+                      <span className="text-muted-foreground">Tracking ID:</span>
+                      <span className="font-mono text-xs">{order.trackingId}</span>
                     </div>
                   )}
 
@@ -215,16 +201,11 @@ const TrackOrder = () => {
                     <Button variant="outline" size="sm" className="flex-1">
                       View Details
                     </Button>
-                    {order.status !== 'delivered' && order.status !== 'cancelled' && (
-                      <LiveTrackingDialog 
-                        orderId={order.id}
-                        trigger={
-                          <Button variant="outline" size="sm" className="flex-1">
-                            <MapPin className="h-4 w-4 mr-1" />
-                            Track Live
-                          </Button>
-                        }
-                      />
+                    {order.status !== 'delivered' && (
+                      <Button variant="outline" size="sm" className="flex-1">
+                        <MapPin className="h-4 w-4 mr-1" />
+                        Track Live
+                      </Button>
                     )}
                   </div>
                 </CardContent>
