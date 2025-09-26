@@ -126,7 +126,7 @@ const Checkout = () => {
           user_id: user?.id,
           total,
           status: 'pending',
-          payment_status: 'pending',
+          payment_status: selectedPayment === 'cash' ? 'pending' : 'completed',
           payment_method: selectedPayment,
           payment_method_selected: selectedPayment,
           shipping_address: formData.address
@@ -371,21 +371,14 @@ const Checkout = () => {
 
       {/* Fixed Bottom Button */}
       <div className="fixed bottom-0 left-0 right-0 bg-card border-t shadow-strong p-4">
-        <PaymentMethodDialog
-          onPaymentMethodSelect={(method) => {
-            setSelectedPayment(method);
-            handlePlaceOrder();
-          }}
-          trigger={
-            <Button 
-              disabled={isProcessing}
-              className="w-full"
-              size="lg"
-            >
-              {isProcessing ? 'Processing...' : `Place Order - R${total.toFixed(2)}`}
-            </Button>
-          }
-        />
+        <Button 
+          onClick={handlePlaceOrder}
+          disabled={isProcessing}
+          className="w-full"
+          size="lg"
+        >
+          {isProcessing ? 'Processing...' : `Place Order - R${total.toFixed(2)}`}
+        </Button>
       </div>
     </div>
   );

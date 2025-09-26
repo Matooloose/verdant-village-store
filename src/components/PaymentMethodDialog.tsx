@@ -16,27 +16,21 @@ const PaymentMethodDialog = ({ onPaymentMethodSelect, trigger }: PaymentMethodDi
 
   const paymentMethods = [
     {
-      id: "cash_on_delivery",
+      id: "cash",
       name: "Cash on Delivery",
       description: "Pay when your order arrives",
       icon: Banknote
     },
     {
       id: "card",
-      name: "Credit/Debit Card",
-      description: "Pay securely with your card",
-      icon: CreditCard
-    },
-    {
-      id: "bank_transfer",
       name: "Bank Transfer",
-      description: "Direct bank transfer",
+      description: "Transfer to farmer's bank account",
       icon: Building
     },
     {
-      id: "mobile_payment",
-      name: "Mobile Payment",
-      description: "Pay with mobile wallet",
+      id: "mobile",
+      name: "Mobile Money",
+      description: "Pay via mobile wallet",
       icon: Smartphone
     }
   ];
