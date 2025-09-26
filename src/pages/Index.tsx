@@ -2,22 +2,18 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAppState } from "@/contexts/AppStateContext";
 
 const Index = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { hasCompletedWelcome } = useAppState();
 
   useEffect(() => {
     if (user) {
-      if (hasCompletedWelcome) {
-        navigate('/home');
-      } else {
-        navigate('/welcome');
-      }
+      navigate('/home');
+    } else {
+      navigate('/login');
     }
-  }, [user, hasCompletedWelcome, navigate]);
+  }, [user, navigate]);
 
 
   return (
