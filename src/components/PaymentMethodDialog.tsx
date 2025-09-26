@@ -22,6 +22,12 @@ const PaymentMethodDialog = ({ onPaymentMethodSelect, trigger }: PaymentMethodDi
       icon: Banknote
     },
     {
+      id: "payfast",
+      name: "PayFast (Card / EFT)",
+      description: "Secure online payment via PayFast",
+      icon: CreditCard
+    },
+    {
       id: "card",
       name: "Bank Transfer",
       description: "Transfer to farmer's bank account",

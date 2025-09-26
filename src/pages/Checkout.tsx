@@ -14,7 +14,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useAppState } from "@/contexts/AppStateContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import PaymentMethodDialog from "@/components/PaymentMethodDialog";
+import md5 from 'blueimp-md5';
 
 interface UserProfile {
   name: string;
@@ -88,6 +88,21 @@ const Checkout = () => {
     }));
   };
 
+  const submitToPayFast = (postUrl: string, fields: Record<string, string>) => {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = postUrl;
+    Object.entries(fields).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = String(value ?? '');
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  };
+
   const handlePlaceOrder = async () => {
     // Validate required fields
     if (!formData.fullName || !formData.phoneNumber || !formData.address) {
@@ -99,10 +114,11 @@ const Checkout = () => {
       return;
     }
 
-    if (selectedPayment !== "cash" && !bankingDetails) {
+    const needsManualDetails = selectedPayment === "card" || selectedPayment === "mobile";
+    if (needsManualDetails && !bankingDetails) {
       toast({
         title: "Missing Payment Details",
-        description: "Please provide your banking details for this payment method",
+        description: "Please provide your payment details for this method",
         variant: "destructive",
       });
       return;
@@ -126,7 +142,7 @@ const Checkout = () => {
           user_id: user?.id,
           total,
           status: 'pending',
-          payment_status: selectedPayment === 'cash' ? 'pending' : 'completed',
+          payment_status: selectedPayment === 'cash' ? 'pending' : (selectedPayment === 'payfast' ? 'pending' : 'completed'),
           payment_method: selectedPayment,
           payment_method_selected: selectedPayment,
           shipping_address: formData.address
@@ -149,6 +165,45 @@ const Checkout = () => {
         .insert(orderItems);
 
       if (itemsError) throw itemsError;
+
+      // Handle PayFast redirect
+      if (selectedPayment === 'payfast') {
+        const PAYFAST_MERCHANT_ID = '10042134';
+        const PAYFAST_MERCHANT_KEY = 'h1ztii0i713gg';
+        const postUrl = 'https://www.payfast.co.za/eng/process';
+
+        const [firstName, ...lastParts] = formData.fullName.trim().split(' ');
+        const name_first = firstName || '';
+        const name_last = lastParts.join(' ') || '';
+
+        const fields: Record<string, string> = {
+          merchant_id: PAYFAST_MERCHANT_ID,
+          merchant_key: PAYFAST_MERCHANT_KEY,
+          return_url: `${window.location.origin}/track-order?orderId=${orderData.id}`,
+          cancel_url: `${window.location.origin}/checkout`,
+          notify_url: `${window.location.origin}/checkout`,
+          name_first,
+          name_last,
+          email_address: user?.email || '',
+          m_payment_id: orderData.id,
+          amount: Number(total).toFixed(2),
+          item_name: `Order ${orderData.id.slice(0, 8)}`,
+          item_description: 'Order payment',
+          email_confirmation: '1',
+          confirmation_address: user?.email || '',
+        };
+
+        const encode = (v: string) => encodeURIComponent(v);
+        const sigString = Object.keys(fields)
+          .filter((k) => fields[k])
+          .sort()
+          .map((k) => `${k}=${encode(fields[k])}`)
+          .join('&');
+        const signature = md5(sigString);
+
+        submitToPayFast(postUrl, { ...fields, signature });
+        return; // Stop here since we are redirecting to PayFast
+      }
 
       // Add success notification
       addNotification({

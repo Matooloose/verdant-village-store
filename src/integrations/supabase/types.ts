@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.4"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -128,8 +128,10 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          payment_id: string | null
           payment_method: string | null
           payment_method_selected: string | null
+          payment_reference: string | null
           payment_status: Database["public"]["Enums"]["payment_status"]
           shipping_address: string | null
           status: Database["public"]["Enums"]["order_status"]
@@ -140,8 +142,10 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          payment_id?: string | null
           payment_method?: string | null
           payment_method_selected?: string | null
+          payment_reference?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           shipping_address?: string | null
           status?: Database["public"]["Enums"]["order_status"]
@@ -152,8 +156,10 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          payment_id?: string | null
           payment_method?: string | null
           payment_method_selected?: string | null
+          payment_reference?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           shipping_address?: string | null
           status?: Database["public"]["Enums"]["order_status"]
@@ -487,6 +493,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      farmer_owns_products_in_order: {
+        Args: { farmer_id: string; order_id: string }
+        Returns: boolean
+      }
       has_active_subscription: {
         Args: { _user_id: string }
         Returns: boolean
@@ -496,6 +506,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_farmer: {
+        Args: { user_id: string }
         Returns: boolean
       }
     }
