@@ -218,22 +218,3 @@ Green-themed design with semantic tokens for agriculture marketplace
     padding-right: env(safe-area-inset-right);
   }
 }
-
-/* Helpers to avoid inline style usage in Dashboard FAB */
-.dashboard-fab {
-  position: fixed;
-  /* left/top are updated from code via ref to persist position without JSX inline styles */
-  left: 0px;
-  top: 0px;
-  z-index: 50;
-  touch-action: none;
-  -webkit-user-select: none;
-  user-select: none;
-  pointer-events: auto;
-}
-
-.no-select {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  user-select: none;
-}

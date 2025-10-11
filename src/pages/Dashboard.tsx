@@ -200,16 +200,6 @@ interface QuickAction {
   disabled?: boolean;
 }
 
-interface WishlistItem {
-  id: string;
-  name: string;
-  price: number;
-  unit: string;
-  image: string;
-  farmName: string;
-  category: string;
-}
-
 const Dashboard: React.FC = () => {
 // Navigation & Auth
 const navigate = useNavigate();
@@ -249,16 +239,7 @@ const [recentOrdersCollapsed, setRecentOrdersCollapsed] = useState(true);
 	
   // Track Orders Modal State
   const [trackOrdersOpen, setTrackOrdersOpen] = useState(false);
-  interface OrderForModal {
-    id: string;
-    status?: string;
-    total?: number;
-    created_at?: string;
-    order_items?: Array<{ products?: { name?: string; images?: string[] } }>;
-    payment_status?: string;
-    shipping_address?: string | null;
-  }
-  const [orders, setOrders] = useState<OrderForModal[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 	
   // Helper: undelivered order statuses
@@ -336,7 +317,7 @@ const scrollRef = useRef<HTMLDivElement>(null);
 const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
 // Fetch products with retry logic and infinite scroll
-const fetchProducts = useCallback(async () => {
+const fetchProducts = async () => {
   try {
     setLoading(true);
     
@@ -374,11 +355,11 @@ const fetchProducts = useCallback(async () => {
 
     if (productsError) throw productsError;
 
-  const newProducts = (productsData || []) as Product[];
-  setProducts(newProducts);
+    const newProducts = productsData || [];
+    setProducts(newProducts);
     
     // Fetch farm names for new products
-  const farmerIds = newProducts.map(p => p.farmer_id).filter(Boolean);
+    const farmerIds = newProducts.map(p => p.farmer_id).filter(Boolean);
     if (farmerIds.length > 0) {
       const { data: farms } = await supabase
         .from('farms')
@@ -404,9 +385,38 @@ const fetchProducts = useCallback(async () => {
   } finally {
     setLoading(false);
   }
-}, [debouncedSearchTerm, filters, toast]);
+};
 
-// (fetchRecentOrders is defined later as a stable useCallback)
+// Fetch recent orders
+const fetchRecentOrders = async () => {
+  if (!user) return;
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`id, status, total, created_at, order_items (id, quantity)`)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    if (error) {
+      console.warn('Error fetching recent orders:', error);
+      return;
+    }
+
+    const transformedOrders: RecentOrder[] = (data || []).map(order => ({
+      id: order.id,
+      orderNumber: `ORD${order.id.slice(-6).toUpperCase()}`,
+      status: order.status as RecentOrder['status'],
+      total: order.total,
+      createdAt: order.created_at,
+      itemCount: order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0
+    }));
+
+    setRecentOrders(transformedOrders);
+  } catch (error) {
+    console.warn('Error fetching recent orders:', error);
+  }
+};
 
 useEffect(() => {
   const fetchData = async (retryCount = 0) => {
@@ -436,7 +446,7 @@ useEffect(() => {
     }
   };
   fetchData();
-}, [toast, filters, user, fetchProducts, fetchRecentOrders, loadUserActivity, fetchRecentlyViewed, fetchPersonalizedFarms]);
+}, [toast, filters, user]);
 
 // Pull to refresh
 const handleRefresh = async () => {
@@ -640,45 +650,38 @@ const trackProductView = useCallback((product: Product) => {
   setUserActivity(prev => ({ ...prev, recently_viewed: updated }));
 }, [user]);
 
-// Fetch recent orders
-const fetchRecentOrders = useCallback(async () => {
+// Fetch functions
+const fetchRecommendations = useCallback(async () => {
+  const recommendations = await generateRecommendations(userActivity);
+  setRecommendedProducts(recommendations);
+}, [userActivity, generateRecommendations]);
+
+const fetchRecentlyViewed = useCallback(() => {
+  if (!user) return;
+  const storageKey = `recently_viewed_${user.id}`;
+  const recentlyViewed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  setRecentlyViewedProducts(recentlyViewed.slice(0, 6));
+}, [user]);
+
+const fetchPersonalizedFarms = useCallback(async () => {
   if (!user) return;
   try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`id, status, total, created_at, order_items (id, quantity)`)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(3);
-
-    if (error) {
-      console.warn('Error fetching recent orders:', error);
-      return;
-    }
-
-    const transformedOrders: RecentOrder[] = (data || []).map((order: any) => ({
-      id: order.id,
-      orderNumber: `ORD${order.id.slice(-6).toUpperCase()}`,
-      status: order.status as RecentOrder['status'],
-      total: order.total,
-      createdAt: order.created_at,
-      itemCount: order.order_items?.reduce((sum: number, item: { quantity?: number }) => sum + (item.quantity || 0), 0) || 0
-    }));
-
-    setRecentOrders(transformedOrders);
+    // Dummy implementation to avoid missing reference error
+    // Replace with actual logic as needed
+    setPersonalizedFarms([]);
   } catch (error) {
-    console.warn('Error fetching recent orders:', error);
+    console.error('Error fetching personalized farms:', error);
   }
 }, [user]);
 
-// Fetch products when search term or filters change (debounced)
+// Fetch products when search term or filters change
 useEffect(() => {
   const timer = setTimeout(() => {
     fetchProducts();
   }, 300);
-
+  
   return () => clearTimeout(timer);
-}, [debouncedSearchTerm, filters, fetchProducts]);
+}, [debouncedSearchTerm, filters]);
 
 // Theme sync
 useEffect(() => {
@@ -693,15 +696,6 @@ useEffect(() => {
 
 // Draggable FAB hook must be called at top-level of component (not inside callbacks)
 const [fabPos, startDrag] = useDraggableFAB({ x: window.innerWidth - 88, y: window.innerHeight - 120 });
-const fabRef = useRef<HTMLDivElement | null>(null);
-
-useEffect(() => {
-  if (!fabRef.current) return;
-  const el = fabRef.current;
-  // update position via DOM to avoid inline style attribute in JSX
-  el.style.left = `${fabPos.x}px`;
-  el.style.top = `${fabPos.y}px`;
-}, [fabPos]);
 
 // Handlers
 const handleNavigation = (path: string) => {
@@ -835,7 +829,7 @@ const handleQuickView = (product: Product) => {
 };
 
 // Helper function to convert Product to WishlistItem
-const productToWishlistItem = (product: Product): WishlistItem => ({
+const productToWishlistItem = (product: Product): Omit<any, "addedAt"> => ({
   id: product.id,
   name: product.name,
   price: product.price,
@@ -876,10 +870,9 @@ const handleAddToCart = async (product: Product | RecommendedProduct) => {
 
 // Get unique categories and price range for filters
 const availableCategories = Array.from(new Set(products.map(p => p.category)));
-const priceRange = useMemo<[number, number]>(() => {
-  if (products.length === 0) return [0, 1000];
-  return [Math.min(...products.map(p => p.price)), Math.max(...products.map(p => p.price))];
-}, [products]);
+const priceRange: [number, number] = products.length > 0 
+  ? [Math.min(...products.map(p => p.price)), Math.max(...products.map(p => p.price))]
+  : [0, 1000];
 
 // Quick Actions for FAB
 const quickActions: QuickAction[] = [
@@ -1843,8 +1836,17 @@ useEffect(() => {
     )}
 
     {/* Floating Action Button */}
-  {showFAB && (
-    <div ref={fabRef} className="dashboard-fab">
+    {showFAB && (
+        <div
+          className="z-50"
+          style={{
+            position: 'fixed',
+            left: fabPos.x,
+            top: fabPos.y,
+            touchAction: 'none',
+            transition: 'box-shadow 0.2s',
+          }}
+        >
           <div className="relative">
           {/* FAB Menu */}
           {fabExpanded && (
@@ -1873,10 +1875,11 @@ useEffect(() => {
           {/* Main FAB Button (draggable) */}
           <Button
             size="lg"
-            className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 transition-all duration-200 cursor-move no-select"
+            className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 transition-all duration-200 cursor-move"
             onClick={() => setFabExpanded(!fabExpanded)}
             onMouseDown={startDrag}
             onTouchStart={startDrag}
+            style={{ userSelect: 'none' }}
           >
             <div className={`transition-transform duration-200 ${fabExpanded ? 'rotate-45' : 'rotate-0'}`}>
               {fabExpanded ? <X className="h-6 w-6" /> : <Zap className="h-6 w-6" />}
