@@ -28,7 +28,7 @@ import {
   Download,
   Eye,
   RotateCcw,
-  DollarSign,
+  
   TrendingUp,
   Star,
   Heart,
@@ -841,7 +841,7 @@ const OrderHistory = () => {
                     <p className="text-sm font-medium text-muted-foreground">Total Spent</p>
                     <p className="text-2xl font-bold">R{analytics.totalSpent.toFixed(2)}</p>
                   </div>
-                  <DollarSign className="h-8 w-8 text-green-600" />
+                  <div className="h-8 w-8 flex items-center justify-center text-green-600 font-bold">R</div>
                 </div>
               </CardContent>
             </Card>

@@ -1009,40 +1009,33 @@ const EnhancedProductReviews: React.FC = () => {
               </Card>
             ))}
 
-            {filteredReviews.length === 0 && (
-              <div className="text-center py-12">
-                <MessageSquare className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No reviews found</h3>
-                <p className="text-muted-foreground mb-4">
-                  {searchQuery || filterBy !== 'all' 
-                    ? 'Try adjusting your filters or search terms'
-                    : 'Be the first to review this product!'
-                  }
-                </p>
-                {checkingPurchase ? (
-                  <Button disabled>
-                    <Clock className="h-4 w-4 mr-2" />
-                    Checking...
-                  </Button>
-                ) : !user ? (
-                  <Button onClick={() => navigate('/login')}>
-                    Sign in to Review
-                  </Button>
-                ) : !hasPurchased ? (
-                  <div className="space-y-2">
-                    <Button disabled variant="outline">
-                      <Shield className="h-4 w-4 mr-2" />
-                      Purchase Required
-                    </Button>
-                    <p className="text-sm text-muted-foreground">
-                      You can only review products you have purchased and received.
-                    </p>
+            {reviews.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                No reviews yet. Be the first to review this product!
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <div key={review.id} className="border-b pb-4 last:border-b-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex flex-shrink-0">
+                          {[...Array(5)].map((_, i) => (
+                            <Star 
+                              key={i} 
+                              className={`h-4 w-4 ${i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="font-medium text-card-foreground truncate max-w-xs">{review.userName}</span>
+                      </div>
+                      <span className="text-sm text-muted-foreground whitespace-nowrap">{format(review.createdAt, 'dd MMM yyyy')}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground break-words">{review.content}</p>
+                    </div>
                   </div>
-                ) : (
-                  <Button onClick={() => setIsWritingReview(true)}>
-                    Write the first review
-                  </Button>
-                )}
+                ))}
               </div>
             )}
           </div>

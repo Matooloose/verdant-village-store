@@ -562,9 +562,9 @@ function ProductDetail() {
                     <div className="space-y-4">
                       {reviews.map((review) => (
                         <div key={review.id} className="border-b pb-4 last:border-b-0">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className="flex">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="flex flex-shrink-0">
                                 {[...Array(5)].map((_, i) => (
                                   <Star 
                                     key={i} 
@@ -572,14 +572,12 @@ function ProductDetail() {
                                   />
                                 ))}
                               </div>
-                              <span className="font-medium text-card-foreground">{review.profiles?.name || 'Anonymous'}</span>
+                              <span className="font-medium text-card-foreground truncate max-w-xs">{review.profiles?.name || 'Anonymous'}</span>
                             </div>
-                            <span className="text-sm text-muted-foreground">
-                              {new Date(review.created_at).toLocaleDateString()}
-                            </span>
+                            <span className="text-sm text-muted-foreground whitespace-nowrap">{new Date(review.created_at).toLocaleDateString()}</span>
                           </div>
                           {review.comment && (
-                            <p className="text-muted-foreground">{review.comment}</p>
+                            <p className="text-muted-foreground break-words">{review.comment}</p>
                           )}
                         </div>
                       ))}

@@ -663,45 +663,7 @@ const UpdateProfile = () => {
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-4xl">
-        {/* Profile Completeness Meter */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              Profile Completeness
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Complete your profile to unlock all features</span>
-                <Badge variant={profileCompleteness.score >= 80 ? 'default' : 'secondary'}>
-                  {profileCompleteness.score}% Complete
-                </Badge>
-              </div>
-              
-              <Progress value={profileCompleteness.score} className="h-2" />
-              
-              {profileCompleteness.suggestions.filter(s => !s.completed).length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Suggestions to improve your profile:</p>
-                  <div className="space-y-1">
-                    {profileCompleteness.suggestions
-                      .filter(s => !s.completed)
-                      .slice(0, 3)
-                      .map((suggestion, index) => (
-                        <div key={index} className="flex items-center justify-between text-xs bg-muted/50 p-2 rounded">
-                          <span>{suggestion.description}</span>
-                          <Badge variant="outline" className="text-xs">+{suggestion.points} pts</Badge>
-                        </div>
-                      ))
-                    }
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          {/* Profile Completeness card removed as requested. Related logic/state remains. */}
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>

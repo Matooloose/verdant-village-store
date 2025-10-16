@@ -239,7 +239,10 @@ const [recentOrdersCollapsed, setRecentOrdersCollapsed] = useState(true);
 	
   // Track Orders Modal State
   const [trackOrdersOpen, setTrackOrdersOpen] = useState(false);
-  const [orders, setOrders] = useState<any[]>([]);
+  // Local types for Dashboard orders (avoid colliding with other files' OrderItem interfaces)
+  interface DashboardOrderItem { id?: string; quantity?: number; unit_price?: number; products?: Partial<Product> | null }
+  interface DashboardOrder { id: string; status: string; total?: number; created_at?: string; order_items?: DashboardOrderItem[] }
+  const [orders, setOrders] = useState<DashboardOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 	
   // Helper: undelivered order statuses
@@ -285,7 +288,7 @@ const [recentOrdersCollapsed, setRecentOrdersCollapsed] = useState(true);
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .then(({ data, error }) => {
-          setOrders(data || []);
+          setOrders((data || []) as DashboardOrder[]);
           setOrdersLoading(false);
         });
     }
@@ -317,7 +320,7 @@ const scrollRef = useRef<HTMLDivElement>(null);
 const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
 // Fetch products with retry logic and infinite scroll
-const fetchProducts = async () => {
+const fetchProducts = useCallback(async () => {
   try {
     setLoading(true);
     
@@ -385,10 +388,10 @@ const fetchProducts = async () => {
   } finally {
     setLoading(false);
   }
-};
+}, [debouncedSearchTerm, filters, toast]);
 
 // Fetch recent orders
-const fetchRecentOrders = async () => {
+const fetchRecentOrders = useCallback(async () => {
   if (!user) return;
   try {
     const { data, error } = await supabase
@@ -409,44 +412,16 @@ const fetchRecentOrders = async () => {
       status: order.status as RecentOrder['status'],
       total: order.total,
       createdAt: order.created_at,
-      itemCount: order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0
+      itemCount: order.order_items?.reduce((sum: number, item: DashboardOrderItem | undefined) => sum + (item?.quantity || 0), 0) || 0
     }));
 
     setRecentOrders(transformedOrders);
   } catch (error) {
     console.warn('Error fetching recent orders:', error);
   }
-};
+}, [user]);
 
-useEffect(() => {
-  const fetchData = async (retryCount = 0) => {
-    setLoading(true);
-    try {
-      await fetchProducts();
-      await fetchRecentOrders();
-      if (user) {
-        await loadUserActivity();
-        await fetchRecentlyViewed();
-        await fetchPersonalizedFarms();
-      }
-    } catch (error) {
-      // Retry logic - attempt up to 2 retries
-      if (retryCount < 2) {
-        setTimeout(() => fetchData(retryCount + 1), 1000 * (retryCount + 1));
-        return;
-      }
-      
-      toast({
-        title: "Error loading data",
-        description: "Failed to load products after multiple attempts",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-  fetchData();
-}, [toast, filters, user]);
+// (fetchData useEffect moved below where dependent callbacks are declared)
 
 // Pull to refresh
 const handleRefresh = async () => {
@@ -486,10 +461,7 @@ useEffect(() => {
   return () => window.removeEventListener('scroll', handleScroll);
 }, []);
 
-// Load user activity on mount
-useEffect(() => {
-  loadUserActivity();
-}, [user]);
+// Load user activity on mount - will be invoked after loadUserActivity is declared
 
 // Smart recommendation system
 const generateRecommendations = useCallback(async (activity: UserActivity): Promise<RecommendedProduct[]> => {
@@ -613,8 +585,8 @@ const loadUserActivity = useCallback(async () => {
 
     if (orders) {
       activity.purchase_history = orders.flatMap(order => 
-        order.order_items?.map((item: any) => item.products) || []
-      ).filter(Boolean);
+        order.order_items?.map((item: DashboardOrderItem | undefined) => item?.products) || []
+      ).filter(Boolean) as Product[];
     }
 
     // Get wishlist items - using a different approach since wishlist table doesn't exist
@@ -675,13 +647,51 @@ const fetchPersonalizedFarms = useCallback(async () => {
 }, [user]);
 
 // Fetch products when search term or filters change
+// Debounced fetch
 useEffect(() => {
   const timer = setTimeout(() => {
     fetchProducts();
   }, 300);
   
   return () => clearTimeout(timer);
-}, [debouncedSearchTerm, filters]);
+}, [debouncedSearchTerm, filters, fetchProducts]);
+
+// Load user activity on mount; loadUserActivity is stable via useCallback
+useEffect(() => {
+  loadUserActivity();
+}, [user, loadUserActivity]);
+
+// Initial data load: products, recent orders, recommendations and personalized farms
+// NOTE: we intentionally depend only on `user` here to avoid re-running this effect
+// when internal fetch callbacks (which may depend on `products` / other state)
+// change identity — that caused an infinite refresh loop. We call the stable
+// callbacks directly inside the effect. If you modify fetch* callbacks to be
+// stable across renders, you can remove the eslint-disable below.
+useEffect(() => {
+  if (!user) return;
+
+  let mounted = true;
+
+  (async () => {
+    try {
+      setLoading(true);
+      // call the fetchers directly; their identities may change but we only
+      // want this effect to run once when the user becomes available
+      await fetchProducts();
+      await fetchRecentOrders();
+      await fetchRecommendations();
+      fetchRecentlyViewed();
+      await fetchPersonalizedFarms();
+    } catch (e) {
+      // errors handled in individual fetchers
+    } finally {
+      if (mounted) setLoading(false);
+    }
+  })();
+
+  return () => { mounted = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user]);
 
 // Theme sync
 useEffect(() => {
@@ -829,7 +839,8 @@ const handleQuickView = (product: Product) => {
 };
 
 // Helper function to convert Product to WishlistItem
-const productToWishlistItem = (product: Product): Omit<any, "addedAt"> => ({
+type WishlistItem = { id: string; name: string; price: number; unit: string; image: string; farmName: string; category: string };
+const productToWishlistItem = (product: Product): WishlistItem => ({
   id: product.id,
   name: product.name,
   price: product.price,
@@ -869,10 +880,12 @@ const handleAddToCart = async (product: Product | RecommendedProduct) => {
 };
 
 // Get unique categories and price range for filters
-const availableCategories = Array.from(new Set(products.map(p => p.category)));
-const priceRange: [number, number] = products.length > 0 
-  ? [Math.min(...products.map(p => p.price)), Math.max(...products.map(p => p.price))]
-  : [0, 1000];
+const availableCategories = useMemo(() => Array.from(new Set(products.map(p => p.category))), [products]);
+const priceRange = useMemo<[number, number]>(() => {
+  if (products.length === 0) return [0, 1000];
+  const prices = products.map(p => p.price);
+  return [Math.min(...prices), Math.max(...prices)];
+}, [products]);
 
 // Quick Actions for FAB
 const quickActions: QuickAction[] = [
@@ -1837,16 +1850,7 @@ useEffect(() => {
 
     {/* Floating Action Button */}
     {showFAB && (
-        <div
-          className="z-50"
-          style={{
-            position: 'fixed',
-            left: fabPos.x,
-            top: fabPos.y,
-            touchAction: 'none',
-            transition: 'box-shadow 0.2s',
-          }}
-        >
+        <div className="fixed right-6 bottom-28 z-50 touch-none">
           <div className="relative">
           {/* FAB Menu */}
           {fabExpanded && (

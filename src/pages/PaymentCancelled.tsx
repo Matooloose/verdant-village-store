@@ -32,7 +32,7 @@ import {
   Shield, 
   CheckCircle, 
   RefreshCw, 
-  DollarSign, 
+  
   Clock, 
   AlertTriangle,
   Building
@@ -642,7 +642,7 @@ const PaymentCancelled = () => {
                                 {method.processingTime}
                               </span>
                               <span className="text-muted-foreground">
-                                <DollarSign className="h-3 w-3 inline mr-1" />
+                                <span className="inline mr-1 font-semibold">R</span>
                                 {method.fees}
                               </span>
                             </div>

@@ -55,6 +55,13 @@ app.post('/payfast-url', (req, res) => {
     if (custom_str1) {
       params.custom_str1 = custom_str1;
     }
+    // Pass subscription parameters through if provided (for recurring payments)
+    const subscriptionParams = ['subscription_type','billing_date','recurring_amount','frequency','cycles','subscription_notify_email','subscription_notify_webhook','subscription_notify_buyer'];
+    subscriptionParams.forEach(key => {
+      if (req.body[key] !== undefined && req.body[key] !== null) {
+        params[key] = req.body[key];
+      }
+    });
     
     const query = Object.entries(params)
       .map(([key, val]) => `${key}=${encodeURIComponent(val)}`)

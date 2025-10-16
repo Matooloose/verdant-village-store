@@ -16,7 +16,7 @@ import {
   CheckCircle, Loader2, Package, ArrowLeft, Receipt, Download, Mail,
   Zap, ShoppingCart, ChevronRight, Repeat, MessageCircle, Sparkles,
   Timer, Heart, Info, Star, Share2, Facebook, Twitter, Instagram,
-  Calendar, Clock, DollarSign, MapPin, Phone, Globe
+  Calendar, Clock, MapPin, Phone, Globe
 } from "lucide-react";
 import { PaymentStatus } from "@/lib/payfast";
 import confetti from 'canvas-confetti';
@@ -898,51 +898,7 @@ const PaymentSuccess = () => {
               </CardContent>
             </Card>
 
-            {/* Next Delivery Estimation */}
-            {recurringOrderSuggestion && (
-              <Card className="border-blue-200 bg-blue-50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-blue-800">
-                    <Calendar className="h-5 w-5" />
-                    Auto-Delivery Savings
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-blue-800">
-                        {recurringOrderSuggestion.discount}% OFF
-                      </p>
-                      <p className="text-sm text-blue-700">
-                        on {recurringOrderSuggestion.frequency} deliveries
-                      </p>
-                    </div>
-                    
-                    <div className="bg-white/50 rounded-lg p-3">
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-blue-600">Next Delivery:</span>
-                          <p className="font-semibold">
-                            {new Date(recurringOrderSuggestion.nextDelivery).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-blue-600">Annual Savings:</span>
-                          <p className="font-semibold">{formatPrice(recurringOrderSuggestion.savings)}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button 
-                      className="w-full"
-                      onClick={() => setIsRecurringDialogOpen(true)}
-                    >
-                      Set Up Auto-Delivery
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Auto-Delivery Savings card removed per request */}
 
             {/* Review Prompt */}
             {showReviewPrompt && (

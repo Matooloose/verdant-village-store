@@ -118,11 +118,11 @@ function FarmerProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
+      <div className="min-h-screen bg-background p-4">
         <div className="max-w-4xl mx-auto">
           <div className="text-center py-12">
-            <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p>Loading farmer profile...</p>
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading farmer profile...</p>
           </div>
         </div>
       </div>
@@ -131,12 +131,12 @@ function FarmerProfile() {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
+      <div className="min-h-screen bg-background p-4">
         <div className="max-w-4xl mx-auto">
           <Card>
             <CardContent className="pt-6 text-center">
-              <h2 className="text-xl font-semibold mb-2">Farmer Not Found</h2>
-              <p className="text-gray-600 mb-4">The farmer profile you're looking for doesn't exist.</p>
+              <h2 className="text-xl font-semibold mb-2 text-card-foreground">Farmer Not Found</h2>
+              <p className="text-muted-foreground mb-4">The farmer profile you're looking for doesn't exist.</p>
               <Button onClick={() => navigate('/dashboard')}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Dashboard
@@ -149,7 +149,7 @@ function FarmerProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
@@ -177,7 +177,7 @@ function FarmerProfile() {
               
               <div className="flex-1 space-y-4">
                 <div className="text-center md:text-left">
-                  <h2 className="text-2xl font-bold">{profile.name || 'Unknown Farmer'}</h2>
+                  <h2 className="text-2xl font-bold text-card-foreground">{profile.name || 'Unknown Farmer'}</h2>
                   <Badge variant="secondary" className="mt-2">
                     <Users className="h-3 w-3 mr-1" />
                     Farmer
@@ -187,19 +187,19 @@ function FarmerProfile() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   {profile.email && (
                     <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-gray-500" />
-                      <span>{profile.email}</span>
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground break-words">{profile.email}</span>
                     </div>
                   )}
                   {profile.phone && (
                     <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-gray-500" />
-                      <span>{profile.phone}</span>
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">{profile.phone}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-gray-500" />
-                    <span>Joined {new Date(profile.created_at).toLocaleDateString()}</span>
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Joined {new Date(profile.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
               </div>

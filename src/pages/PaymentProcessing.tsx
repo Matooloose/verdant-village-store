@@ -41,7 +41,7 @@ import {
   RefreshCw,
   Zap,
   TrendingUp,
-  DollarSign,
+  
   Calendar,
   MapPin,
   User,

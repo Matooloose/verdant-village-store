@@ -38,7 +38,7 @@ import {
   Phone,
   Calendar as CalendarIcon,
   Heart,
-  DollarSign,
+  
   Zap,
   Save,
   Star,
@@ -343,6 +343,7 @@ const Checkout = () => {
   // Payment methods
   const paymentMethods = [
     { value: "payfast", label: "PayFast" },
+    { value: "payshap", label: "Payshap" },
     { value: "card", label: "Card" },
     { value: "cash", label: "Cash on Delivery" },
   ];
@@ -357,6 +358,17 @@ const Checkout = () => {
       setShowCardFields(false);
     }
   }, [selectedPaymentMethod]);
+
+  // Subscription options (used for Payshap / PayFast recurring flows)
+  const [isSubscription, setIsSubscription] = useState(false);
+  const [subscriptionType, setSubscriptionType] = useState<number>(1); // 1 = recurring payment
+  const [billingDate, setBillingDate] = useState<string>(new Date().toISOString().slice(0,10));
+  const [recurringAmount, setRecurringAmount] = useState<number>(Math.max(0, Number((checkoutTotal || 0).toFixed(2))));
+  const [frequency, setFrequency] = useState<number>(1);
+  const [cycles, setCycles] = useState<number>(12);
+  const [subscriptionNotifyEmail, setSubscriptionNotifyEmail] = useState<boolean>(true);
+  const [subscriptionNotifyWebhook, setSubscriptionNotifyWebhook] = useState<boolean>(true);
+  const [subscriptionNotifyBuyer, setSubscriptionNotifyBuyer] = useState<boolean>(true);
 
   useEffect(() => {
     if (user) {

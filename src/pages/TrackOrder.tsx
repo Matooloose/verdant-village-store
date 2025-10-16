@@ -586,7 +586,7 @@ const TrackOrder = () => {
                       </div>
                       <div className="text-center">
                         <p className="text-muted-foreground">Total</p>
-                        <p className="font-medium">R{p.total.toFixed(2)}</p>
+                        <p className="font-medium">R{(unitPrice * quantity).toFixed(2)}</p>
                       </div>
                     </div>
                   </div>

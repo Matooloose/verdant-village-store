@@ -38,7 +38,7 @@ import {
   Phone,
   Calendar as CalendarIcon,
   Heart,
-  DollarSign,
+  
   Zap,
   Save,
   Star,

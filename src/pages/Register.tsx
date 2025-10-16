@@ -1,10 +1,10 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Leaf } from "lucide-react";
+import { Leaf, Check, X, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,6 +18,20 @@ const Register: React.FC = () => {
   const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [showCheckEmail, setShowCheckEmail] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // live password requirement checks
+  const pw = form.password || '';
+  const pwChecks = {
+    length: pw.length >= 8,
+    uppercase: /[A-Z]/.test(pw),
+    number: /\d/.test(pw),
+  special: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw),
+  };
+  const pwPassedCount = Object.values(pwChecks).filter(Boolean).length;
+  const allPwOk = pwPassedCount === 4;
+  const confirmMatch = form.password === form.confirm && form.confirm.length > 0;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -32,10 +46,16 @@ const Register: React.FC = () => {
       toast({ title: 'Invalid email', description: 'Please enter a valid email address', variant: 'destructive' });
       return false;
     }
-    if (!form.password || form.password.length < 8) {
-      toast({ title: 'Weak password', description: 'Password should be at least 8 characters', variant: 'destructive' });
+    // Password policy: min 8 chars, at least one uppercase, one number, one special
+    const pw = form.password || '';
+    const pwPolicy = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/;
+    if (!pwPolicy.test(pw)) {
+      const msg = 'Password must be at least 8 characters and include an uppercase letter, a number and a special character';
+      setPasswordError(msg);
+      toast({ title: 'Weak password', description: msg, variant: 'destructive' });
       return false;
     }
+    setPasswordError(null);
     if (form.password !== form.confirm) {
       toast({ title: 'Passwords do not match', description: 'Please confirm your password', variant: 'destructive' });
       return false;
@@ -128,16 +148,60 @@ const Register: React.FC = () => {
               </div>
               <div>
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" name="password" type="password" value={form.password} onChange={handleChange} className="h-11" />
+                <div className="relative">
+                  <Input id="password" name="password" type={showPassword ? 'text' : 'password'} value={form.password} onChange={handleChange} className="h-11 pr-10" />
+                  <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary" onClick={() => setShowPassword(s => !s)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {passwordError && <p className="text-xs text-red-600 mt-1">{passwordError}</p>}
+
+                {/* Password requirements checklist */}
+                <div className="mt-2 text-sm" aria-live="polite">
+                  <ul className="space-y-1">
+                    <li className="flex items-center gap-2">
+                      {pwChecks.length ? <Check className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-red-500" />}
+                      <span className={pwChecks.length ? 'text-sm text-green-600' : 'text-sm text-red-500'}>At least 8 characters</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      {pwChecks.uppercase ? <Check className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-red-500" />}
+                      <span className={pwChecks.uppercase ? 'text-sm text-green-600' : 'text-sm text-red-500'}>One uppercase letter (A–Z)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      {pwChecks.number ? <Check className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-red-500" />}
+                      <span className={pwChecks.number ? 'text-sm text-green-600' : 'text-sm text-red-500'}>One number (0–9)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      {pwChecks.special ? <Check className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-red-500" />}
+                      <span className={pwChecks.special ? 'text-sm text-green-600' : 'text-sm text-red-500'}>One special character (!@#$...)</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
               <div>
                 <Label htmlFor="confirm">Confirm Password</Label>
-                <Input id="confirm" name="confirm" type="password" value={form.confirm} onChange={handleChange} className="h-11" />
+                <Input id="confirm" name="confirm" type={showPassword ? 'text' : 'password'} value={form.confirm} onChange={handleChange} className="h-11" />
               </div>
 
               <div className="flex gap-3">
-                <Button type="submit" className="flex-1" disabled={loading}>{loading ? 'Creating...' : 'Create account'}</Button>
+                <Button
+                  type="submit"
+                  className="flex-1"
+                  disabled={loading || !allPwOk || !confirmMatch}
+                  aria-describedby="register-password-hint"
+                >
+                  {loading ? 'Creating...' : 'Create account'}
+                </Button>
               </div>
+              {/* Helper text shown when CTA is disabled to explain why */}
+              {!loading && (!allPwOk || !confirmMatch) && (
+                <p id="register-password-hint" className="text-xs text-muted-foreground mt-2">
+                  {(!allPwOk) ? 'Meet all password requirements' : (!confirmMatch ? 'Passwords must match' : '')}
+                </p>
+              )}
+
+              {/* Screen-reader live summary of password checklist */}
+              <div className="sr-only" aria-live="polite">{`Password requirements met ${pwPassedCount} of 4. ${confirmMatch ? 'Passwords match.' : 'Passwords do not match.'}`}</div>
             </form>
 
             <div className="text-center text-sm mt-4">
@@ -161,7 +225,7 @@ const CheckEmailScreen: React.FC<{
 }> = ({ email, onManualSignIn, attemptAutoSignIn }) => {
   const [status, setStatus] = useState<'waiting' | 'attempting' | 'signed_in' | 'failed'>('waiting');
 
-  React.useEffect(() => {
+  useEffect(() => {
     let attempts = 0;
     let cancelled = false;
 
