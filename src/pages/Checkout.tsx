@@ -494,8 +494,8 @@ const Checkout = () => {
       // 3. Handle payment based on method
       if (selectedPaymentMethod === 'payfast') {
         try {
-          // Use the production Lovable URL for PayFast callbacks
-          const baseUrl = 'https://129e63c9-901d-44ae-b6a7-67b4aa20f07d.lovableproject.com';
+          // Use current app URL for PayFast callbacks
+          const baseUrl = window.location.origin;
           const isMobile = Capacitor.isNativePlatform();
           
           const returnUrl = `${baseUrl}/payment-success?order_id=${createdOrder.id}`;
