@@ -494,23 +494,12 @@ const Checkout = () => {
       // 3. Handle payment based on method
       if (selectedPaymentMethod === 'payfast') {
         try {
-          // Use an HTTPS landing page for mobile return/cancel URLs so PayFast accepts them.
-          // That landing page will forward to the native app scheme (farmersbracket://...) to open the app.
+          // Use the production Lovable URL for PayFast callbacks
+          const baseUrl = 'https://129e63c9-901d-44ae-b6a7-67b4aa20f07d.lovableproject.com';
           const isMobile = Capacitor.isNativePlatform();
-          const mobileLanding = `${window.location.origin}/mobile-pay-return`;
-
-          const baseReturnUrl = isMobile
-            ? mobileLanding
-            : window.location.origin + '/payment-success';
-
-          // Add order ID to return URL as a fallback since server might not support custom_str1 yet
-          const returnUrl = `${baseReturnUrl}?order_id=${createdOrder.id}`;
-
-          const baseCancelUrl = isMobile
-            ? mobileLanding
-            : window.location.origin + '/payment-cancelled';
-
-          const cancelUrl = `${baseCancelUrl}?order_id=${createdOrder.id}&status=cancelled`;
+          
+          const returnUrl = `${baseUrl}/payment-success?order_id=${createdOrder.id}`;
+          const cancelUrl = `${baseUrl}/payment-cancelled?order_id=${createdOrder.id}`;
           
           console.log('Initiating PayFast payment with data:', {
             amount: totalWithDelivery.toFixed(2),
