@@ -6,6 +6,23 @@
 Green-themed design with semantic tokens for agriculture marketplace
 */
 
+/* Custom utilities for OrderHistory improvements */
+@layer utilities {
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
 @layer base {
   :root {
     /* Agriculture Green Theme */

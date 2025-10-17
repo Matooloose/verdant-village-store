@@ -1,11 +1,11 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.129e63c9901d44aeb6a767b4aa20f07d',
-  appName: 'verdant-village-store',
+  appId: 'com.farmersbracket.app',
+  appName: 'farmersbracket',
   webDir: 'dist',
   server: {
-    url: 'https://129e63c9-901d-44ae-b6a7-67b4aa20f07d.lovableproject.com?forceHideBadge=true',
+    androidScheme: 'https',
     cleartext: true
   },
   plugins: {

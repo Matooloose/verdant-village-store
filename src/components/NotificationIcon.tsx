@@ -9,14 +9,21 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAppState } from "@/contexts/AppStateContext";
+import { useNavigate } from 'react-router-dom';
 
 export const NotificationIcon = () => {
   const [open, setOpen] = useState(false);
-  const { notifications, markNotificationAsRead, getUnreadCount } = useAppState();
+  const { notifications, markNotificationAsRead, getUnreadCount, markAllNotificationsAsRead } = useAppState();
+  const navigate = useNavigate();
   const unreadCount = getUnreadCount();
 
-  const handleNotificationClick = (id: string) => {
+  const handleNotificationClick = (id: string, action_url?: string) => {
     markNotificationAsRead(id);
+    if (action_url) {
+      // close popover and navigate
+      setOpen(false);
+      navigate(action_url);
+    }
   };
 
   const getTypeColor = (type: string) => {
@@ -48,8 +55,13 @@ export const NotificationIcon = () => {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="end">
-        <div className="p-4 border-b">
+        <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold text-foreground">Notifications</h3>
+          <div>
+            <Button size="sm" variant="ghost" onClick={() => markAllNotificationsAsRead()}>
+              Mark all read
+            </Button>
+          </div>
         </div>
         <ScrollArea className="h-80">
           {notifications.length === 0 ? (
@@ -64,7 +76,7 @@ export const NotificationIcon = () => {
                   className={`p-3 cursor-pointer hover:bg-muted transition-colors ${
                     !notification.read ? 'bg-muted/50' : ''
                   }`}
-                  onClick={() => handleNotificationClick(notification.id)}
+                  onClick={() => handleNotificationClick(notification.id, notification.action_url)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">

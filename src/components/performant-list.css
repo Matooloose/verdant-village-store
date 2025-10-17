@@ -1,0 +1,70 @@
+/* Bar chart bar for OrderHistory.tsx */
+.bar-chart-bar {
+  height: var(--bar-height, 40px);
+}
+
+/* Carousel slide track for Welcome.tsx */
+.carousel-slide-track {
+  transform: translateX(var(--carousel-translate, 0));
+  width: var(--carousel-width, 100%);
+}
+
+/* Virtualized list container/content/item for PerformantList.tsx */
+.virtualized-list-container {
+  height: var(--container-height, 400px);
+}
+.virtualized-list-content {
+  height: var(--list-total-height, 400px);
+}
+.virtualized-list-item {
+  position: absolute;
+  top: var(--item-top, 0);
+  height: var(--item-height, 40px);
+  width: 100%;
+}
+/* Performance optimized list styles */
+.virtualized-list-container {
+  overflow: auto;
+}
+
+.virtualized-list-content {
+  position: relative;
+}
+
+.virtualized-list-item {
+  position: absolute;
+  width: 100%;
+}
+
+.performant-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.performant-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.performant-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .performant-grid-3,
+  .performant-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .performant-grid-2,
+  .performant-grid-3,
+  .performant-grid-4 {
+    grid-template-columns: 1fr;
+  }
+}

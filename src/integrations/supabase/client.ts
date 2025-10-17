@@ -15,3 +15,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
   }
 });
+
+// Untyped alias for ad-hoc queries to tables not present in the generated Database typing.
+// Use sparingly; prefer updating the generated types when possible.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const supabaseAny = supabase as unknown as any;

@@ -8,12 +8,12 @@ import { Switch } from "@/components/ui/switch";
 import { Filter, X } from "lucide-react";
 
 interface FilterDialogProps {
-  onFiltersChange: (filters: any) => void;
+  onFiltersChange: (filters: { priceRange: [number, number]; organicOnly: boolean; featuredOnly: boolean; categories: string[] }) => void;
 }
 
 const FilterDialog = ({ onFiltersChange }: FilterDialogProps) => {
   const [open, setOpen] = useState(false);
-  const [priceRange, setPriceRange] = useState([0, 100]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 100]);
   const [organicOnly, setOrganicOnly] = useState(false);
   const [featuredOnly, setFeaturedOnly] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -75,7 +75,7 @@ const FilterDialog = ({ onFiltersChange }: FilterDialogProps) => {
             <Label>Price Range (R{priceRange[0]} - R{priceRange[1]})</Label>
             <Slider
               value={priceRange}
-              onValueChange={setPriceRange}
+              onValueChange={(value) => setPriceRange([value[0], value[1]])}
               max={100}
               step={5}
               className="w-full"
