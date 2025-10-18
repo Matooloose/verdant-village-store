@@ -44,7 +44,7 @@ interface PaymentMethod {
   type: 'card' | 'bank' | 'wallet' | 'crypto' | 'installment';
   name: string;
   description: string;
-  icon: any;
+  icon: React.ComponentType<Record<string, unknown>>;
   processingTime: string;
   fees: string;
   available: boolean;
@@ -94,11 +94,13 @@ interface SupportOption {
   type: 'chat' | 'phone' | 'email' | 'faq';
   title: string;
   description: string;
-  icon: any;
+  icon: React.ComponentType<Record<string, unknown>>;
   availability: string;
   responseTime: string;
   action: () => void;
 }
+
+import BottomNavBar from '@/components/BottomNavBar';
 
 const PaymentCancelled = () => {
   const navigate = useNavigate();
@@ -345,14 +347,7 @@ const PaymentCancelled = () => {
     }
   ];
 
-  useEffect(() => {
-    // Auto-save cart when component loads
-    handleSaveCart();
-  }, []);
-
-  const currentError = errorCodes[errorCode] || errorCodes.user_cancelled;
-
-  const handleSaveCart = () => {
+  const handleSaveCart = React.useCallback(() => {
     // Use real cart items from context
     if (cartItems && cartItems.length > 0) {
       const savedCart: SavedCart = {
@@ -383,7 +378,14 @@ const PaymentCancelled = () => {
         variant: "destructive"
       });
     }
-  };
+  }, [cartItems, toast]);
+
+  useEffect(() => {
+    // Auto-save cart when component loads
+    handleSaveCart();
+  }, [handleSaveCart]);
+
+  const currentError = errorCodes[errorCode] || errorCodes.user_cancelled;
 
   const handleRetryPayment = () => {
     if (selectedPaymentMethod) {
@@ -458,6 +460,7 @@ const PaymentCancelled = () => {
                 <p className="text-sm text-muted-foreground">Let's resolve this together</p>
               </div>
             </div>
+          
             
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setIsSupportDialogOpen(true)}>
@@ -502,13 +505,10 @@ const PaymentCancelled = () => {
           </CardContent>
         </Card>
 
-        {/* Main Content Tabs */}
+        {/* Main Content Tabs - simplified: only Retry tab is shown for cancelled payments */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-1">
             <TabsTrigger value="retry">Try Again</TabsTrigger>
-            <TabsTrigger value="methods">Payment Options</TabsTrigger>
-            <TabsTrigger value="plans">Payment Plans</TabsTrigger>
-            <TabsTrigger value="help">Get Help</TabsTrigger>
           </TabsList>
 
           {/* Retry Tab */}
@@ -564,279 +564,6 @@ const PaymentCancelled = () => {
                       <p className="text-sm">{cause}</p>
                     </div>
                   ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Save Cart */}
-            <Card className="border-blue-200 bg-blue-50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-blue-800">
-                  <Save className="h-5 w-5" />
-                  Your Cart is Safe
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-blue-700 mb-4">
-                  Don't worry! Your cart has been automatically saved and will be available for 7 days.
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => navigate('/cart')} className="gap-2">
-                    <ShoppingCart className="h-4 w-4" />
-                    View Saved Cart
-                  </Button>
-                  <Button variant="outline" onClick={() => setIsSaveCartDialogOpen(true)} className="gap-2">
-                    <Save className="h-4 w-4" />
-                    Manage Saved Carts
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Payment Methods Tab */}
-          <TabsContent value="methods" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Alternative Payment Methods
-                </CardTitle>
-                <CardDescription>
-                  Try a different payment method that might work better
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {paymentMethods.map((method) => (
-                    <Card 
-                      key={method.id} 
-                      className={`cursor-pointer transition-all ${
-                        selectedPaymentMethod === method.id ? 'border-primary bg-primary/5' : ''
-                      } ${!method.available ? 'opacity-50' : 'hover:shadow-md'}`}
-                      onClick={() => method.available && setSelectedPaymentMethod(method.id)}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <method.icon className="h-5 w-5 text-primary" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-semibold text-sm">{method.name}</h4>
-                              {method.recommended && (
-                                <Badge variant="secondary" className="text-xs">
-                                  Recommended
-                                </Badge>
-                              )}
-                              {!method.available && (
-                                <Badge variant="outline" className="text-xs">
-                                  Unavailable
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mb-2">{method.description}</p>
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-muted-foreground">
-                                <Clock className="h-3 w-3 inline mr-1" />
-                                {method.processingTime}
-                              </span>
-                              <span className="text-muted-foreground">
-                                <span className="inline mr-1 font-semibold">R</span>
-                                {method.fees}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-
-                <Separator className="my-6" />
-
-                <div className="flex gap-3">
-                  <Button 
-                    onClick={handleRetryPayment}
-                    disabled={!selectedPaymentMethod}
-                    className="gap-2"
-                  >
-                    <CheckCircle className="h-4 w-4" />
-                    Use Selected Method
-                  </Button>
-                  <Button variant="outline" onClick={() => setIsSecurityDialogOpen(true)} className="gap-2">
-                    <Shield className="h-4 w-4" />
-                    Security Information
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Payment Plans Tab */}
-          <TabsContent value="plans" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Payment Plans Available
-                </CardTitle>
-                <CardDescription>
-                  Split your payment into manageable installments
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {orderTotal > 0 ? (
-                  <div className="space-y-4">
-                    {paymentPlans.map((plan) => (
-                      <Card 
-                        key={plan.id}
-                        className={`cursor-pointer transition-all ${
-                          selectedPaymentPlan === plan.id ? 'border-primary bg-primary/5' : ''
-                        } ${orderTotal < plan.eligibleAmount ? 'opacity-50' : 'hover:shadow-md'}`}
-                        onClick={() => orderTotal >= plan.eligibleAmount && setSelectedPaymentPlan(plan.id)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <h4 className="font-semibold">{plan.name}</h4>
-                              <p className="text-sm text-muted-foreground">{plan.description}</p>
-                            </div>
-                            {orderTotal < plan.eligibleAmount && (
-                              <Badge variant="outline" className="text-xs">
-                                Min {formatPrice(plan.eligibleAmount)}
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Monthly Payment</span>
-                              <p className="font-semibold">{formatPrice(plan.monthlyPayment)}</p>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Duration</span>
-                              <p className="font-semibold">{plan.installments} months</p>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Interest Rate</span>
-                              <p className="font-semibold">{plan.interestRate}%</p>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Processing Fee</span>
-                              <p className="font-semibold">{formatPrice(plan.processingFee)}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-
-                    <Separator />
-
-                    <div className="flex gap-3">
-                      <Button 
-                        onClick={() => setIsPaymentPlanDialogOpen(true)}
-                        disabled={!selectedPaymentPlan}
-                        className="gap-2"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        Apply for Selected Plan
-                      </Button>
-                      <Button variant="outline" onClick={() => navigate('/faq')} className="gap-2">
-                        <BookOpen className="h-4 w-4" />
-                        Learn More
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">Payment amount not available for installment plans</p>
-                    <Button variant="outline" onClick={() => navigate('/cart')} className="mt-4">
-                      Return to Cart
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Help Tab */}
-          <TabsContent value="help" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Headphones className="h-5 w-5" />
-                  Contact Support
-                </CardTitle>
-                <CardDescription>
-                  Get help from our payment specialists
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {supportOptions.map((option) => (
-                    <Card key={option.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <option.icon className="h-5 w-5 text-primary" />
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-sm mb-1">{option.title}</h4>
-                            <p className="text-xs text-muted-foreground mb-2">{option.description}</p>
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                              <span>{option.availability}</span>
-                              <span>{option.responseTime}</span>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full mt-3 text-xs"
-                              onClick={option.action}
-                            >
-                              Contact Now
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Security Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Payment Security
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <Shield className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                    <h4 className="font-semibold text-sm text-green-800">SSL Encrypted</h4>
-                    <p className="text-xs text-green-700">All payments are secure</p>
-                  </div>
-                  <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <CheckCircle className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                    <h4 className="font-semibold text-sm text-blue-800">PCI Compliant</h4>
-                    <p className="text-xs text-blue-700">Industry standard security</p>
-                  </div>
-                  <div className="text-center p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                    <Globe className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-                    <h4 className="font-semibold text-sm text-purple-800">Global Standards</h4>
-                    <p className="text-xs text-purple-700">Worldwide payment protection</p>
-                  </div>
-                </div>
-
-                <div className="text-center">
-                  <Button variant="outline" onClick={() => setIsSecurityDialogOpen(true)} className="gap-2">
-                    <Info className="h-4 w-4" />
-                    Learn More About Security
-                  </Button>
                 </div>
               </CardContent>
             </Card>

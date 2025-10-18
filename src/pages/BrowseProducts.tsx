@@ -399,8 +399,8 @@ const ProductCardView = ({ product }: { product: Product }) => {
                   </Button>
                 </div>
                 {reviewCount > 0 && (
-                  <div className="flex items-center gap-1">
-                    <div className="flex">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       {[...Array(5)].map((_, i) => (
                         <Star
                           key={i}
@@ -408,7 +408,7 @@ const ProductCardView = ({ product }: { product: Product }) => {
                         />
                       ))}
                     </div>
-                    <span className="text-sm text-muted-foreground">({reviewCount})</span>
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">({reviewCount})</span>
                   </div>
                 )}
                 {product.description && (
@@ -422,9 +422,8 @@ const ProductCardView = ({ product }: { product: Product }) => {
                       <span className="text-xl font-bold text-green-600">R{product.price.toFixed(2)}</span>
                       <span className="text-sm text-muted-foreground ml-1">/ {product.unit}</span>
                     </div>
-                    <div className="flex items-center text-sm text-muted-foreground bg-muted px-2 py-1 rounded">
-                      <Package className="h-3 w-3 mr-1" />
-                      <span className="font-medium">{product.quantity}</span>
+                    <div className="text-sm text-muted-foreground">
+                      {product.quantity} items available
                     </div>
                   </div>
                 </div>
@@ -842,6 +841,18 @@ return (
           product={quickViewProduct}
           isOpen={!!quickViewProduct}
           onClose={() => setQuickViewProduct(null)}
+          onAddToCart={(productId, qty) => {
+            const p = products.find(p => p.id === productId);
+            if (p) {
+              handleAddToCart(p);
+            }
+          }}
+          onAddToWishlist={(productId) => {
+            const p = products.find(p => p.id === productId);
+            if (p) addToWishlist({ id: p.id, name: p.name, price: p.price, unit: p.unit, image: p.images?.[0] || '/placeholder.svg', farmName: p.farmName || 'Local Farm', category: p.category });
+          }}
+          isInWishlist={isInWishlist(quickViewProduct.id)}
+          isAddingToCart={false}
         />
       )}
     </div>

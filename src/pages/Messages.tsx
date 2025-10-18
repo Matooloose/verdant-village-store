@@ -468,6 +468,25 @@ const Messages: React.FC = () => {
     }
   }, [user, checkSubscription]);
 
+  // Listen for cross-tab or in-page subscription changes and re-check immediately
+  useEffect(() => {
+    const onChange = () => {
+      checkSubscription();
+    };
+    const onEvent = (e: Event) => {
+      // event.detail might contain { id, status }
+      checkSubscription();
+    };
+
+    window.addEventListener('storage', onChange);
+    window.addEventListener('subscription:changed', onEvent as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', onChange);
+      window.removeEventListener('subscription:changed', onEvent as EventListener);
+    };
+  }, [checkSubscription]);
+
   useEffect(() => {
     if (user) {
       fetchConversations();

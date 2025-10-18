@@ -176,11 +176,12 @@ const Checkout = () => {
     setPromoError('');
 
     try {
+     
       // TODO: Fix promo_codes table integration - temporarily disabled
       setPromoError('Promo code system is temporarily disabled');
       return false;
       
-      /*
+      
       const { data: promoData, error } = await supabaseAny
         .from('promo_codes')
         .select('*')
@@ -228,7 +229,7 @@ const Checkout = () => {
         variant: "default"
       });
       return true;
-      */
+     
 
     } catch (error) {
       const msg = getErrorMessage(error);
@@ -345,7 +346,8 @@ const Checkout = () => {
     { value: "payfast", label: "PayFast" },
     { value: "payshap", label: "Payshap" },
     { value: "card", label: "Card" },
-    { value: "cash", label: "Cash on Delivery" },
+    // Show Cash on Delivery but mark as disabled / coming soon
+    { value: "cash", label: "Cash on Delivery (Coming soon)", disabled: true },
   ];
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(paymentMethods[0].value);
   const [showCardFields, setShowCardFields] = useState(false);
@@ -359,16 +361,22 @@ const Checkout = () => {
     }
   }, [selectedPaymentMethod]);
 
-  // Subscription options (used for Payshap / PayFast recurring flows)
-  const [isSubscription, setIsSubscription] = useState(false);
-  const [subscriptionType, setSubscriptionType] = useState<number>(1); // 1 = recurring payment
-  const [billingDate, setBillingDate] = useState<string>(new Date().toISOString().slice(0,10));
-  const [recurringAmount, setRecurringAmount] = useState<number>(Math.max(0, Number((checkoutTotal || 0).toFixed(2))));
-  const [frequency, setFrequency] = useState<number>(1);
-  const [cycles, setCycles] = useState<number>(12);
-  const [subscriptionNotifyEmail, setSubscriptionNotifyEmail] = useState<boolean>(true);
-  const [subscriptionNotifyWebhook, setSubscriptionNotifyWebhook] = useState<boolean>(true);
-  const [subscriptionNotifyBuyer, setSubscriptionNotifyBuyer] = useState<boolean>(true);
+  // Prevent selecting disabled payment methods (e.g. Cash on Delivery marked Coming soon)
+  const handlePaymentMethodChange = (value: string) => {
+    const method = paymentMethods.find(m => m.value === value);
+    if (method?.disabled) {
+      toast({ title: "Coming Soon", description: `${method.label} is not available yet. Please choose another payment method.`, variant: "default" });
+      return;
+    }
+    setSelectedPaymentMethod(value);
+  };
+
+  // Subscription-related UI removed per request
+
+  // Minimal chat subscription toggle (only subscription kept: chat/messages access)
+  const [subscribeToChat, setSubscribeToChat] = useState<boolean>(false);
+  // Which chat plan to subscribe to: one_time, monthly, annual
+  const [subscriptionOption, setSubscriptionOption] = useState<'one_time' | 'monthly' | 'annual'>('one_time');
 
   useEffect(() => {
     if (user) {
@@ -401,6 +409,13 @@ const Checkout = () => {
       return;
     }
     try {
+      // Guard: do not proceed with disabled payment methods (e.g. Cash on Delivery marked as Coming soon)
+      const selectedMethodMeta = paymentMethods.find(m => m.value === selectedPaymentMethod);
+      if (selectedMethodMeta?.disabled) {
+        toast({ title: "Coming Soon", description: `${selectedMethodMeta.label} is not available yet. Please choose another payment method.`, variant: "default" });
+        setIsProcessing(false);
+        return;
+      }
       // Validate cart items before saving order_items
       for (const item of cartItems) {
         if (!item.id || typeof item.id !== 'string' || !/^([0-9a-fA-F-]{36})$/.test(item.id)) {
@@ -494,70 +509,77 @@ const Checkout = () => {
       // 3. Handle payment based on method
       if (selectedPaymentMethod === 'payfast') {
         try {
-          // Use current app URL for PayFast callbacks
-          const baseUrl = window.location.origin;
+          // Use deep link redirect for mobile, web route for web
           const isMobile = Capacitor.isNativePlatform();
-          
-          const returnUrl = `${baseUrl}/payment-success?order_id=${createdOrder.id}`;
-          const cancelUrl = `${baseUrl}/payment-cancelled?order_id=${createdOrder.id}`;
-          
+          const baseReturn = isMobile
+            ? 'https://matooloose.github.io/page_for_redirection/index.html'
+            : window.location.origin + '/payment-success';
+
+          // Append order id and custom_str1 to return URL so we can reliably pick it up on redirect
+          const returnUrl = `${baseReturn}?order_id=${createdOrder.id}&custom_str1=${createdOrder.id}`;
+
+          // Use the canonical /payment-cancelled route for cancelled payments
+          const cancelUrl = `${window.location.origin}/payment-cancelled?order_id=${createdOrder.id}`;
           console.log('Initiating PayFast payment with data:', {
             amount: totalWithDelivery.toFixed(2),
             item_name: `Order for ${formData.fullName}`,
             return_url: returnUrl,
             custom_str1: createdOrder.id,
           });
-          
+
           console.log('Making request to:', 'https://paying-project.onrender.com/payfast-url');
-          
+
           const payfastRes = await fetch('https://paying-project.onrender.com/payfast-url', {
             method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            mode: 'cors', // Explicitly handle CORS
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            mode: 'cors',
             body: JSON.stringify({
               amount: totalWithDelivery.toFixed(2),
               item_name: `Order for ${formData.fullName}`,
               return_url: returnUrl,
               cancel_url: cancelUrl,
               notify_url: 'https://paying-project.onrender.com/payfast-webhook',
-              custom_str1: createdOrder.id, // Pass the order ID for payment success handling
+              custom_str1: createdOrder.id,
+              // Indicate chat subscription intent so server can wire subscriptions
+
             }),
           });
-          
+
           if (!payfastRes.ok) {
             const errorText = await payfastRes.text();
             console.error('PayFast server error response:', errorText);
             throw new Error(`PayFast server error: ${payfastRes.status} ${payfastRes.statusText}. Response: ${errorText}`);
           }
-          
+
           const data = await payfastRes.json();
           console.log('PayFast response data:', data);
-          
+
           // Check if the PayFast URL was generated successfully
           if (!data.url) {
             throw new Error('PayFast URL generation failed - no URL returned');
           }
-          
+
           console.log('PayFast URL generated:', data.url);
-          
+
           // Use Capacitor Browser for mobile, window.open for web
+          // Persist pending order id so return pages can find it even if PayFast doesn't include query params
+          try { localStorage.setItem('pending_order_id', createdOrder.id); } catch (e) { console.warn('Could not persist pending_order_id', e); }
+
           if (isMobile) {
             await Browser.open({ url: data.url });
           } else {
+            // Use location replace to avoid leaving the pending page in history
             window.location.href = data.url;
           }
-          
+
           // Reset processing state after opening payment
           setIsProcessing(false);
-          
+
           // Show success message
-          toast({ 
-            title: "Processing Payment", 
+          toast({
+            title: "Processing Payment",
             description: "Your order has been created. Please complete payment in the new window.",
-            variant: "default"
+            variant: "default",
           });
         } catch (unknownErr) {
           console.error('PayFast integration error:', unknownErr);
@@ -806,11 +828,13 @@ const Checkout = () => {
                       <p className="text-sm text-destructive mt-1">{validationErrors.email}</p>
                     )}
                   </div>
+
+              
                   
                   {/* Only show address field for delivery */}
                   {deliveryMethod === 'delivery' && (
                     <div>
-                      <Label htmlFor="address">Delivery Address *</Label>
+                       <Label htmlFor="address">Delivery Address *</Label>
                       <Textarea
                         id="address"
                         value={formData.address}
@@ -852,13 +876,13 @@ const Checkout = () => {
                 <CardContent>
                   <RadioGroup 
                     value={selectedPaymentMethod} 
-                    onValueChange={setSelectedPaymentMethod}
+                    onValueChange={(v) => handlePaymentMethodChange(v)}
                     className="space-y-3"
                   >
                     {paymentMethods.map((method) => (
-                      <div key={method.value} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-accent">
-                        <RadioGroupItem value={method.value} id={method.value} />
-                        <Label htmlFor={method.value} className="flex items-center gap-3 cursor-pointer flex-1">
+                      <div key={method.value} className={`flex items-center space-x-3 p-3 border rounded-lg ${method.disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-accent'}`}>
+                        <RadioGroupItem value={method.value} id={method.value} disabled={method.disabled} />
+                        <Label htmlFor={method.value} className={`flex items-center gap-3 ${method.disabled ? 'cursor-not-allowed' : 'cursor-pointer'} flex-1`}>
                           {method.value === 'payfast' && <Wallet className="h-5 w-5 text-blue-600" />}
                           {method.value === 'card' && <CreditCard className="h-5 w-5 text-green-600" />}
                           {method.value === 'cash' && <Banknote className="h-5 w-5 text-orange-600" />}

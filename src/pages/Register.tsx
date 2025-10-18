@@ -134,7 +134,7 @@ const Register: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle>Create an account</CardTitle>
-            <CardDescription>Simple signup — verify by email to continue</CardDescription>
+            <CardDescription>Signup — verify by email to continue</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">

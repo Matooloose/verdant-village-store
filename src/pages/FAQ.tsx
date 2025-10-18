@@ -21,6 +21,7 @@ import {
   ThumbsDown,
   Share2
 } from "lucide-react";
+import ContactSupportDialog from '@/components/ContactSupportDialog';
 import { useToast } from "@/hooks/use-toast";
 
 interface FAQItem {
@@ -45,6 +46,7 @@ interface FAQCategory {
 const FAQ = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
@@ -440,7 +442,7 @@ const FAQ = () => {
               </Button>
               <Button 
                 variant="outline"
-                onClick={() => navigate('/contact-support')}
+                onClick={() => setIsContactDialogOpen(true)}
                 className="gap-2"
               >
                 <Mail className="h-4 w-4" />
@@ -458,6 +460,7 @@ const FAQ = () => {
           </CardContent>
         </Card>
       </main>
+      <ContactSupportDialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen} />
     </div>
   );
 };

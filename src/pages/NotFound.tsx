@@ -39,6 +39,7 @@ import {
   Sparkles,
   TrendingUp
 } from "lucide-react";
+import ContactSupportDialog from '@/components/ContactSupportDialog';
 
 // Enhanced interfaces
 interface PageSuggestion {
@@ -115,6 +116,7 @@ const NotFound = () => {
   const [isBrokenLinkDialogOpen, setIsBrokenLinkDialogOpen] = useState(false);
   const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
   const [isGameDialogOpen, setIsGameDialogOpen] = useState(false);
+  const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
 
   // Form states
   const [brokenLinkReport, setBrokenLinkReport] = useState<Partial<BrokenLinkReport>>({
@@ -831,7 +833,7 @@ const NotFound = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-3">
-                <Button variant="outline" className="w-full justify-start gap-3" onClick={() => navigate('/contact-support')}>
+                <Button variant="outline" className="w-full justify-start gap-3" onClick={() => setIsContactDialogOpen(true)}>
                   <MessageSquare className="h-4 w-4" />
                   Contact Support
                 </Button>
@@ -1118,6 +1120,9 @@ const NotFound = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+          {/* Contact Support Dialog */}
+          <ContactSupportDialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen} />
     </div>
   );
 };

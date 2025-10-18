@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Check, ArrowLeft, MessageCircle, Crown, Calendar, Zap, CreditCard, Settings, TrendingUp, Users, Clock, AlertTriangle, Pause, Play } from "lucide-react";
+import ContactSupportDialog from '@/components/ContactSupportDialog';
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays, addMonths, differenceInDays } from "date-fns";
 
@@ -32,6 +35,11 @@ interface UserSubscription {
 }
 
 const Subscriptions = () => {
+  // Base URL for the PayFast/webhook helper service. Set VITE_PAYFAST_SERVER_URL in your env
+  // to point to the running webhook server (e.g. http://localhost:3002). Defaults to localhost:3002
+  // for local development.
+  const PAYFAST_API_BASE = (import.meta.env.VITE_PAYFAST_SERVER_URL as string) || 'http://localhost:3002';
+
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -44,15 +52,11 @@ const Subscriptions = () => {
   // Dialog states
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [isPauseDialogOpen, setIsPauseDialogOpen] = useState(false);
+  const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
 
-  useEffect(() => {
-    fetchPlans();
-    if (user) {
-      fetchUserSubscription();
-    }
-  }, [user]);
+  
 
-  const fetchPlans = async () => {
+  const fetchPlans = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('subscription_plans')
@@ -75,9 +79,9 @@ const Subscriptions = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  const fetchUserSubscription = async () => {
+  const fetchUserSubscription = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -89,6 +93,8 @@ const Subscriptions = () => {
         `)
         .eq('user_id', user.id)
         .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (error) throw error;
@@ -96,7 +102,52 @@ const Subscriptions = () => {
     } catch (error) {
       console.error('Error fetching user subscription:', error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchPlans();
+    if (user) {
+      fetchUserSubscription();
+    }
+  }, [user, fetchPlans, fetchUserSubscription]);
+
+  // Persist the `next` query parameter so we can redirect users back after subscription completes
+  const location = useLocation();
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(location.search);
+      const next = params.get('next');
+      if (next) {
+        localStorage.setItem('subscription_next', next);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [location.search]);
+
+  // When user subscription becomes active, redirect back to saved `next` if present
+  useEffect(() => {
+    if (!userSubscription) return;
+    // Inline check to avoid needing to add isSubscriptionActive as a dependency
+    const active = ((): boolean => {
+      if (!userSubscription) return false;
+      if (userSubscription.status !== 'active') return false;
+      if (!userSubscription.end_date) return true;
+      return new Date(userSubscription.end_date) > new Date();
+    })();
+
+    if (active) {
+      try {
+        const saved = localStorage.getItem('subscription_next');
+        if (saved) {
+          localStorage.removeItem('subscription_next');
+          navigate(saved);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [userSubscription, navigate]);
 
   const handleSubscribe = async (planId: string, plan: SubscriptionPlan) => {
     if (!user) {
@@ -104,65 +155,140 @@ const Subscriptions = () => {
       return;
     }
 
+    // Create a pending subscription intent server-side so the client can't tamper with plan ids
+    let pendingSubId: string | null = null;
     try {
       const endDate = plan.duration_months > 0 
         ? new Date(Date.now() + plan.duration_months * 30 * 24 * 60 * 60 * 1000).toISOString()
         : null;
 
-      const { error } = await supabase
-        .from('user_subscriptions')
-        .insert({
-          user_id: user.id,
-          subscription_plan_id: planId,
-          end_date: endDate,
-          payment_method: 'pending'
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success!",
-        description: "You can now access chat features!",
+      const res = await fetch(`${PAYFAST_API_BASE}/subscriptions/create-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, subscription_plan_id: planId, end_date: endDate })
       });
 
-      await fetchUserSubscription();
-      setActiveTab('manage');
-    } catch (error) {
-      console.error('Error subscribing:', error);
-      toast({
-        title: "Error",
-        description: "Failed to subscribe. Please try again.",
-        variant: "destructive"
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Failed to create intent: ${res.status}`);
+      }
+
+      const json = await res.json();
+      pendingSubId = json?.id;
+      if (!pendingSubId) throw new Error('No intent id returned');
+    } catch (err) {
+      console.error('Failed to create pending subscription intent:', err);
+      toast({ title: 'Error', description: 'Could not start subscription. Please try again.', variant: 'destructive' });
+      return;
+    }
+
+    // Initiate PayFast payment for the subscription via the same payfast-url service used in checkout
+    try {
+      const isMobile = Capacitor.isNativePlatform();
+      const returnUrl = isMobile
+        ? 'https://matooloose.github.io/page_for_redirection/index.html'
+        : window.location.origin + '/subscriptions';
+      const cancelUrl = window.location.origin + '/subscriptions';
+
+      const subscriptionOption = plan.duration_months === 0 ? 'one_time' : plan.duration_months === 1 ? 'monthly' : plan.duration_months === 12 ? 'annual' : 'one_time';
+
+      const body = {
+        amount: plan.price.toFixed(2),
+        item_name: plan.name,
+        item_description: plan.description || plan.name,
+        return_url: returnUrl,
+        cancel_url: cancelUrl,
+        notify_url: 'https://paying-project.onrender.com/payfast-webhook',
+        // correlate subscription id and user id
+        custom_str1: pendingSubId,
+        custom_str2: user.id,
+        subscription_type: 'chat',
+        subscription_option: subscriptionOption,
+      };
+
+      console.log('Requesting PayFast URL for subscription:', body);
+
+      const res = await fetch('https://paying-project.onrender.com/payfast-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        mode: 'cors',
+        body: JSON.stringify(body),
       });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('PayFast server error response:', text);
+        throw new Error(text || `PayFast server error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.url) throw new Error('PayFast URL generation failed - no URL returned');
+
+      if (isMobile) {
+        await Browser.open({ url: data.url });
+      } else {
+        window.location.href = data.url;
+      }
+
+      toast({ title: 'Processing Payment', description: 'Please complete the payment in the new window.' });
+    } catch (err) {
+      console.error('Error initiating PayFast subscription:', err);
+      toast({ title: 'Payment Error', description: 'Failed to start payment. Please try again.', variant: 'destructive' });
+      // Optionally leave the pending subscription for manual cleanup or show retry
     }
   };
 
   const handleCancelSubscription = async () => {
-    if (!userSubscription) return;
+    if (!userSubscription) {
+      toast({ title: 'No subscription', description: 'No active subscription to cancel', variant: 'destructive' });
+      return;
+    }
+
+    if (!user) {
+      toast({ title: 'Not authenticated', description: 'Please sign in to manage your subscription', variant: 'destructive' });
+      return;
+    }
 
     try {
-      const { error } = await supabase
-        .from('user_subscriptions')
-        .update({ status: 'cancelled' })
-        .eq('id', userSubscription.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Subscription cancelled",
-        description: "Your subscription has been cancelled",
+      // Call server-side RPC to cancel subscription (enforces ownership and logs event)
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('cancel_subscription', {
+        _user_id: user.id,
+        _subscription_id: userSubscription.id,
+        _reason: 'user_request',
+        _source: 'user'
       });
 
+      if (rpcError) {
+        console.error('RPC cancel_subscription error:', rpcError);
+        toast({ title: 'Cancel failed', description: rpcError.message || 'Unable to cancel subscription', variant: 'destructive' });
+        return;
+      }
+
+      // RPC returns a rowset; when called via supabase.rpc it often returns an array or object depending on function signature
+      // We'll consider a successful response as truthy rpcResult
+      if (!rpcResult) {
+        toast({ title: 'Cancel failed', description: 'Unexpected server response', variant: 'destructive' });
+        return;
+      }
+
+      toast({ title: 'Subscription cancelled', description: 'Your subscription has been cancelled' });
+
+      // Refresh local state and UI
       setUserSubscription(null);
+      // Notify other open pages/components that subscription changed so they can revoke access immediately
+      try {
+        const ev = new CustomEvent('subscription:changed', { detail: { id: userSubscription.id, status: 'cancelled' } });
+        window.dispatchEvent(ev);
+        // Also set a short-lived localStorage flag to support multi-tab environments
+        localStorage.setItem('subscription_changed_at', Date.now().toString());
+      } catch (e) {
+        // ignore
+      }
       setIsCancelDialogOpen(false);
       setActiveTab('plans');
-    } catch (error) {
-      console.error('Error cancelling subscription:', error);
-      toast({
-        title: "Error",
-        description: "Failed to cancel subscription",
-        variant: "destructive"
-      });
+    } catch (err) {
+      console.error('Error cancelling subscription (RPC):', err);
+      toast({ title: 'Error', description: 'Failed to cancel subscription', variant: 'destructive' });
     }
   };
 
@@ -355,9 +481,9 @@ const Subscriptions = () => {
                   <div className="flex items-start space-x-3">
                     <Crown className="h-5 w-5 text-primary mt-0.5" />
                     <div>
-                      <h4 className="font-medium">Priority Support</h4>
+                      <h4 className="font-medium">Direct Chat with Admin</h4>
                       <p className="text-sm text-muted-foreground">
-                        Get help from our support team with orders and issues
+                        Reach our admin team directly for billing and account help
                       </p>
                     </div>
                   </div>
@@ -442,10 +568,11 @@ const Subscriptions = () => {
                         <MessageCircle className="h-4 w-4 mr-2" />
                         Chat with Farmers
                       </Button>
-                      <Button variant="outline" onClick={() => navigate('/contact-support')}>
+                      <Button variant="outline" onClick={() => setIsContactDialogOpen(true)}>
                         <Crown className="h-4 w-4 mr-2" />
                         Contact Support
                       </Button>
+                      <ContactSupportDialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen} />
                     </div>
                   </CardContent>
                 </Card>

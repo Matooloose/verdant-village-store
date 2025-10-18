@@ -14,6 +14,7 @@ import {
   RefreshCw,
   ArrowLeft
 } from 'lucide-react';
+import ContactSupportDialog from '@/components/ContactSupportDialog';
 
 const EmailVerification: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ const EmailVerification: React.FC = () => {
   const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verified' | 'error'>('pending');
+  const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
 
   useEffect(() => {
     if (user?.email) {
@@ -257,7 +259,7 @@ const EmailVerification: React.FC = () => {
                     Try Again
                   </Button>
                   <Button 
-                    onClick={() => navigate('/contact-support')}
+                    onClick={() => setIsContactDialogOpen(true)}
                     variant="outline"
                     className="flex-1"
                   >
@@ -279,8 +281,13 @@ const EmailVerification: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+      <ContactSupportDialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen} />
     </div>
   );
 };
+
+// Render dialog outside the main return is not needed; we'll include it inside the component JSX
+
+export default EmailVerification;
 
 export default EmailVerification;

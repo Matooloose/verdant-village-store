@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+ import React, { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 // This page is used as an HTTPS landing page for payment gateways that

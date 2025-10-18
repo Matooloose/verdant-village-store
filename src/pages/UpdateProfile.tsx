@@ -205,13 +205,8 @@ const UpdateProfile = () => {
     }
   ];
 
-  useEffect(() => {
-    loadProfile();
-    loadSecurityData();
-    calculateProfileCompleteness();
-  }, [user]);
-
-  const loadProfile = async () => {
+  // Intentionally only re-run on user change. The called functions are stable enough for this effect.
+  const loadProfile = React.useCallback(async () => {
     if (!user) return;
     
     try {
@@ -245,9 +240,11 @@ const UpdateProfile = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, toast]);
 
-  const loadSecurityData = async () => {
+  
+
+  const loadSecurityData = React.useCallback(async () => {
     if (!user?.id) {
       console.error('User ID is required to load security data');
       return;
@@ -308,9 +305,9 @@ const UpdateProfile = () => {
       setSecuritySessions([]);
       setLoginHistory([]);
     }
-  };
+  }, [user]);
 
-  const calculateProfileCompleteness = () => {
+  const calculateProfileCompleteness = React.useCallback(() => {
   const suggestions = [
     {
       field: 'phone',
@@ -343,7 +340,14 @@ const UpdateProfile = () => {
     const score = Math.round((completedPoints / totalPoints) * 100);
 
     setProfileCompleteness({ score, suggestions });
-  };
+  }, [profileData, deliveryPreferences]);
+
+  // Run profile/load/security on user change (callbacks are stable via useCallback)
+  useEffect(() => {
+    loadProfile();
+    loadSecurityData();
+    calculateProfileCompleteness();
+  }, [user, loadProfile, loadSecurityData, calculateProfileCompleteness]);
 
   const handleInputChange = (field: keyof ProfileData, value: string | boolean) => {
     setProfileData(prev => ({
@@ -627,9 +631,10 @@ const UpdateProfile = () => {
 
 
 
+  // Recompute completeness when profile data or delivery prefs change.
   useEffect(() => {
     calculateProfileCompleteness();
-  }, [profileData, deliveryPreferences]);
+  }, [profileData, deliveryPreferences, calculateProfileCompleteness]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -967,33 +972,41 @@ const UpdateProfile = () => {
         </div>
       )}
 
-      {/* Support Modal */}
-      {showSupport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-background text-foreground rounded-lg p-6 w-full max-w-md shadow-lg border">
-            <h3 className="text-lg font-bold mb-2">Contact Support</h3>
-            <div className="mb-4 text-sm space-y-2">
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4" />
-                <span>Website: verdantvillage.com</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span>📧</span>
-                <span>Email: support@verdantvillage.com</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span>📞</span>
-                <span>Phone: +27 123 456 7890</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                <span>Hours: Mon-Fri 8AM-6PM SAST</span>
-              </div>
+      {/* Support Dialog (uses shared Dialog primitives) */}
+      <Dialog open={showSupport} onOpenChange={setShowSupport}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Contact Support</DialogTitle>
+            <DialogDescription>Choose how you'd like to get help</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 p-4">
+            <div className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              <span>Website: verdantvillage.com</span>
             </div>
-            <Button variant="outline" onClick={() => setShowSupport(false)}>Close</Button>
+            <div className="flex items-center gap-2">
+              <span>📧</span>
+              <button className="text-sm text-primary underline" onClick={() => window.location.href = 'mailto:support@verdantvillage.com'}>support@verdantvillage.com</button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span>📞</span>
+              <button className="text-sm text-primary underline" onClick={() => window.open('tel:+271234567890')}>+27 123 456 7890</button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              <span>Hours: Mon-Fri 8AM-6PM SAST</span>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <Button variant="outline" onClick={() => setShowSupport(false)}>Close</Button>
+              <Button onClick={() => window.open('https://verdantvillage.com', '_blank')}>Visit Website</Button>
+            </div>
           </div>
-        </div>
-      )}
+
+          <DialogFooter>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

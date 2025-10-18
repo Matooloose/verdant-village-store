@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, supabaseAny } from "@/integrations/supabase/client";
@@ -20,6 +20,7 @@ import {
   User, Star, CheckCircle, ExternalLink, Download, Eye, Zap
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import ContactSupportForm from '@/components/ContactSupportForm';
 
 // Enhanced interfaces
 interface SupportTicket {
@@ -40,13 +41,14 @@ interface SupportTicket {
   resolutionTime?: number;
 }
 
+// Supporting types
 interface TicketAttachment {
   id: string;
   filename: string;
   fileType: string;
   fileSize: number;
   uploadedAt: string;
-  url: string;
+  url?: string;
   thumbnailUrl?: string;
 }
 
@@ -54,9 +56,8 @@ interface TicketMessage {
   id: string;
   content: string;
   author: string;
-  authorType: 'customer' | 'agent' | 'system';
+  authorType: 'customer' | 'agent' | 'system' | string;
   timestamp: string;
-  attachments?: TicketAttachment[];
 }
 
 interface KnowledgeBaseSuggestion {
@@ -66,7 +67,7 @@ interface KnowledgeBaseSuggestion {
   category: string;
   relevanceScore: number;
   url: string;
-  type: 'faq' | 'guide' | 'video' | 'troubleshoot';
+  type: string;
 }
 
 interface ServiceLevel {
@@ -78,7 +79,7 @@ interface ServiceLevel {
 }
 
 interface EmergencyContact {
-  type: 'phone' | 'email' | 'chat';
+  type: 'phone' | 'email' | 'chat' | string;
   label: string;
   value: string;
   availability: string;
@@ -132,13 +133,7 @@ const ContactSupport = () => {
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      loadSupportTickets();
-    }
-  }, [user]);
-
-  const loadSupportTickets = async () => {
+  const loadSupportTickets = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -163,37 +158,49 @@ const ContactSupport = () => {
 
       if (error) throw error;
 
-      const transformedTickets: SupportTicket[] = (tickets || []).map(ticket => ({
-        id: ticket.id,
-        title: ticket.title,
-        description: ticket.description,
-        category: ticket.category as any,
-        priority: ticket.priority as any,
-        status: ticket.status as any,
-        createdAt: ticket.created_at,
-        updatedAt: ticket.updated_at,
-        assignedAgent: ticket.assigned_agent || undefined,
-        estimatedResolution: ticket.estimated_resolution || undefined,
-        satisfactionRating: ticket.satisfaction_rating || undefined,
-        resolutionTime: ticket.resolution_time || undefined,
-        tags: ticket.tags || [],
-        attachments: (ticket.support_attachments || []).map((att: any) => ({
-          id: att.id,
-          filename: att.filename,
-          fileType: att.file_type,
-          fileSize: att.file_size,
-          uploadedAt: att.uploaded_at,
-          url: att.url,
-          thumbnailUrl: att.thumbnail_url || undefined
-        })),
-        messages: (ticket.support_messages || []).map((msg: any) => ({
-          id: msg.id,
-          content: msg.content,
-          author: msg.author,
-          authorType: msg.author_type as any,
-          timestamp: msg.created_at
-        }))
-      }));
+      const transformedTickets: SupportTicket[] = (tickets || []).map((ticketRaw: Record<string, unknown>) => {
+        const ticket = ticketRaw as Record<string, unknown>;
+        const supportAttachments = (ticket.support_attachments || []) as unknown as Record<string, unknown>[];
+        const supportMessages = (ticket.support_messages || []) as unknown as Record<string, unknown>[];
+
+        return {
+          id: String(ticket.id),
+          title: String(ticket.title || ''),
+          description: String(ticket.description || ''),
+          category: String(ticket.category || ''),
+          priority: String(ticket.priority || 'low') as SupportTicket['priority'],
+          status: String(ticket.status || 'open') as SupportTicket['status'],
+          createdAt: String(ticket.created_at || ''),
+          updatedAt: String(ticket.updated_at || ''),
+          assignedAgent: ticket.assigned_agent ? String(ticket.assigned_agent) : undefined,
+          estimatedResolution: ticket.estimated_resolution ? String(ticket.estimated_resolution) : undefined,
+          satisfactionRating: ticket.satisfaction_rating ? Number(ticket.satisfaction_rating) : undefined,
+          resolutionTime: ticket.resolution_time ? Number(ticket.resolution_time) : undefined,
+          tags: (ticket.tags || []) as string[],
+          attachments: supportAttachments.map((att) => {
+            const attRec = att as Record<string, unknown>;
+            return {
+              id: String(attRec.id),
+              filename: String(attRec.filename || ''),
+              fileType: String(attRec.file_type || ''),
+              fileSize: Number(attRec.file_size as number) || 0,
+              uploadedAt: String(attRec.uploaded_at || ''),
+              url: (attRec.url as string) || undefined,
+              thumbnailUrl: attRec.thumbnail_url ? String(attRec.thumbnail_url) : undefined
+            };
+          }),
+          messages: supportMessages.map((msg) => {
+            const msgRec = msg as Record<string, unknown>;
+            return {
+              id: String(msgRec.id),
+              content: String(msgRec.content || ''),
+              author: String(msgRec.author || ''),
+              authorType: String(msgRec.author_type || 'customer') as TicketMessage['authorType'],
+              timestamp: String(msgRec.created_at || '')
+            };
+          })
+        } as SupportTicket;
+      });
 
       setSupportTickets(transformedTickets);
     } catch (error) {
@@ -201,7 +208,13 @@ const ContactSupport = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadSupportTickets();
+    }
+  }, [user, loadSupportTickets]);
 
   // Static service levels - could be moved to database later
   const serviceLevels: ServiceLevel[] = [
@@ -470,10 +483,11 @@ const ContactSupport = () => {
     return matchesStatus && matchesPriority && matchesCategory && matchesSearch;
   }).sort((a, b) => {
     switch (ticketFilter.sortBy) {
-      case 'priority':
-        const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
-        return (priorityOrder[b.priority as keyof typeof priorityOrder] || 0) - 
-               (priorityOrder[a.priority as keyof typeof priorityOrder] || 0);
+      case 'priority': {
+        const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 } as Record<string, number>;
+        return (priorityOrder[b.priority] || 0) - 
+               (priorityOrder[a.priority] || 0);
+      }
       case 'status':
         return a.status.localeCompare(b.status);
       case 'oldest':
@@ -595,191 +609,16 @@ const ContactSupport = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Basic Information */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Your Name *</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => handleInputChange('name', e.target.value)}
-                        placeholder="Enter your full name"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email Address *</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
-                        placeholder="Enter your email address"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {/* Category and Priority */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Category *</Label>
-                      <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="payment">Payment Issues</SelectItem>
-                          <SelectItem value="delivery">Delivery Problems</SelectItem>
-                          <SelectItem value="account">Account Support</SelectItem>
-                          <SelectItem value="technical">Technical Issues</SelectItem>
-                          <SelectItem value="product">Product Quality</SelectItem>
-                          <SelectItem value="farmer">Farmer Communication</SelectItem>
-                          <SelectItem value="subscription">Subscription Management</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="priority">Priority</Label>
-                      <Select value={formData.priority} onValueChange={(value) => handleInputChange('priority', value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">Low - General inquiry</SelectItem>
-                          <SelectItem value="medium">Medium - Standard issue</SelectItem>
-                          <SelectItem value="high">High - Urgent assistance needed</SelectItem>
-                          <SelectItem value="urgent">Urgent - Critical issue</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Subject and Message */}
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="subject">Subject *</Label>
-                      <Input
-                        id="subject"
-                        value={formData.subject}
-                        onChange={(e) => handleInputChange('subject', e.target.value)}
-                        placeholder="Brief description of your issue"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="message">Detailed Description *</Label>
-                      <Textarea
-                        id="message"
-                        value={formData.message}
-                        onChange={(e) => handleInputChange('message', e.target.value)}
-                        placeholder="Please provide as much detail as possible about your issue..."
-                        rows={6}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {/* File Upload */}
-                  <div className="space-y-2">
-                    <Label>Attachments (Optional)</Label>
-                    <div
-                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                        isDragOver ? 'border-primary bg-primary/5' : 'border-gray-300'
-                      }`}
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                    >
-                      <Upload className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Drag and drop files here, or click to browse
-                      </p>
-                      <p className="text-xs text-muted-foreground mb-4">
-                        Supports: Images, Videos, PDFs, Text files (Max 10MB each)
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        Choose Files
-                      </Button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        className="hidden"
-                        accept="image/*,video/*,.pdf,.txt,.zip"
-                        onChange={(e) => handleFileUpload(e.target.files)}
-                        aria-label="Upload attachments"
-                      />
-                    </div>
-
-                    {/* Uploaded Files */}
-                    {attachments.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium">Attached Files:</h4>
-                        <div className="space-y-2">
-                          {attachments.map((file, index) => {
-                            const fileId = file.name + file.size;
-                            const progress = uploadProgress[fileId] || 0;
-                            const FileIconComponent = getFileIcon(file.type);
-                            
-                            return (
-                              <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
-                                <FileIconComponent className="h-8 w-8 text-primary flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{file.name}</p>
-                                  <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
-                                  {progress < 100 && (
-                                    <Progress value={progress} className="mt-1 h-1" />
-                                  )}
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeAttachment(index)}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Service Level Agreement Info */}
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h4 className="font-medium text-blue-800 mb-2">Expected Response Time</h4>
-                    <p className="text-sm text-blue-700">
-                      Based on your selected priority ({formData.priority}), you can expect a response within{' '}
-                      <strong>{getResponseTime(formData.priority)}</strong>.
-                    </p>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="flex gap-4">
-                    <Button type="submit" disabled={isSubmitting} className="flex-1">
-                      {isSubmitting ? (
-                        <>
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent mr-2" />
-                          Submitting...
-                        </>
-                      ) : (
-                        'Submit Support Ticket'
-                      )}
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => navigate('/dashboard')}>
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
+                <ContactSupportForm
+                  defaultName={formData.name}
+                  defaultEmail={formData.email}
+                  onSuccess={(id) => {
+                    // Switch to history and refresh list after successful create
+                    setActiveTab('ticket-history');
+                    loadSupportTickets();
+                    toast({ title: 'Ticket submitted', description: `Ticket ${id} created` });
+                  }}
+                />
               </CardContent>
             </Card>
 

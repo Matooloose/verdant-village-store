@@ -17,11 +17,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Function to verify PayFast signature
-function verifySignature(data: any, signature: string, passPhrase: string = '') {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function verifySignature(data: Record<string, any>, signature: string, passPhrase: string = '') {
   // Create parameter string
   let pfOutput = '';
-  for (let key in data) {
-    if (data.hasOwnProperty(key) && key !== 'signature' && data[key] !== '') {
+  for (const key in data) {
+    if (Object.prototype.hasOwnProperty.call(data, key) && key !== 'signature' && data[key] !== '') {
       pfOutput += `${key}=${encodeURIComponent(data[key]).replace(/%20/g, '+')}&`;
     }
   }
@@ -106,8 +107,9 @@ app.post('/payfast/webhook', async (req, res) => {
     }
 
     // Create/update payment record
-    try {
-      const { error: paymentError } = await (supabase as any)
+  try {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: paymentError } = await (supabase as any)
         .from('payments')
         .upsert({
           order_id: orderId,
@@ -136,6 +138,144 @@ app.post('/payfast/webhook', async (req, res) => {
       console.warn('Payment table not yet deployed:', err);
     }
 
+    // If this webhook contains a subscription intent, handle it (chat subscription)
+    try {
+      const subscriptionType = req.body.subscription_type || otherData.subscription_type;
+      const subscriptionOption = req.body.subscription_option || otherData.subscription_option || null;
+      if (payment_status === 'COMPLETE' && subscriptionType === 'chat') {
+        console.log('Processing chat subscription for user:', userId, 'option:', subscriptionOption);
+
+        // Map subscription_option to duration_months
+        const optionToMonths: Record<string, number> = {
+          'one_time': 0,
+          'monthly': 1,
+          'annual': 12,
+        };
+        const desiredMonths = subscriptionOption && optionToMonths[subscriptionOption] !== undefined ? optionToMonths[subscriptionOption] : null;
+
+        interface SubscriptionPlan { id: string; duration_months: number; name?: string; }
+        let plan: SubscriptionPlan | null = null;
+
+        if (desiredMonths !== null) {
+          const { data: selectedPlan, error: selErr } = await supabase
+            .from('subscription_plans')
+            .select('*')
+            .eq('duration_months', desiredMonths)
+            .ilike('name', '%chat%')
+            .limit(1);
+          if (selErr) console.warn('Error fetching selected chat plan:', selErr);
+          if (selectedPlan && selectedPlan.length > 0) plan = selectedPlan[0];
+        }
+
+        // If no specific plan found (or no option supplied), fall back to any chat plan (one_time first)
+        if (!plan) {
+          const { data: fallbackOne, error: fallbackErr } = await supabase
+            .from('subscription_plans')
+            .select('*')
+            .eq('duration_months', 0)
+            .ilike('name', '%chat%')
+            .limit(1);
+          if (!fallbackErr && fallbackOne && fallbackOne.length > 0) plan = fallbackOne[0];
+          else {
+            const { data: fallbackMonthly, error: fallbackMonthlyErr } = await supabase
+              .from('subscription_plans')
+              .select('*')
+              .eq('duration_months', 1)
+              .ilike('name', '%chat%')
+              .limit(1);
+            if (!fallbackMonthlyErr && fallbackMonthly && fallbackMonthly.length > 0) plan = fallbackMonthly[0];
+          }
+        }
+
+        if (!plan) {
+          console.warn('No chat subscription plan found; skipping subscription provisioning');
+        } else {
+          // If webhook provided a pending subscription id (custom_str1), try to activate that
+          const pendingSubId = custom_str1 || null;
+          if (pendingSubId) {
+            try {
+              const { data: pendingRows, error: pendingErr } = await supabase
+                .from('user_subscriptions')
+                .select('*')
+                .eq('id', pendingSubId)
+                .eq('user_id', userId)
+                .eq('status', 'pending')
+                .limit(1);
+
+              if (!pendingErr && pendingRows && pendingRows.length > 0) {
+                // Activate the existing pending subscription
+                const { error: activateErr } = await supabase
+                  .from('user_subscriptions')
+                  .update({
+                    status: 'active',
+                    start_date: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    payment_method: 'payfast'
+                  })
+                  .eq('id', pendingSubId);
+
+                if (activateErr) console.error('Failed to activate pending subscription:', activateErr);
+                else console.log('Activated pending subscription id:', pendingSubId);
+
+                // done
+                plan = null; // prevent double-insert below
+              }
+            } catch (err) {
+              console.warn('Error while activating pending subscription:', err);
+            }
+          }
+
+          if (plan) {
+            // Check for existing active subscription for this user and plan
+            const { data: existingSubs, error: existingErr } = await supabase
+              .from('user_subscriptions')
+              .select('*')
+              .eq('user_id', userId)
+              .eq('subscription_plan_id', plan.id)
+              .eq('status', 'active')
+              .limit(1);
+
+            if (existingErr) {
+              console.warn('Error checking existing subscriptions:', existingErr);
+            }
+
+            if (existingSubs && existingSubs.length > 0) {
+              console.log('User already has active subscription for plan, skipping insert');
+            } else {
+              // Compute end_date if duration_months > 0
+              let endDate: string | null = null;
+              if (plan.duration_months && Number(plan.duration_months) > 0) {
+                const d = new Date();
+                d.setMonth(d.getMonth() + Number(plan.duration_months));
+                endDate = d.toISOString();
+              }
+
+              const { error: subInsertErr } = await supabase
+                .from('user_subscriptions')
+                .insert({
+                  user_id: userId,
+                  subscription_plan_id: plan.id,
+                  status: 'active',
+                  start_date: new Date().toISOString(),
+                  end_date: endDate,
+                  payment_method: 'payfast',
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                });
+
+              if (subInsertErr) {
+                console.error('Failed to insert user subscription:', subInsertErr);
+              } else {
+                console.log('User subscription created for user:', userId, 'plan:', plan.id);
+              }
+            }
+          }
+        }
+      }
+    } catch (subErr) {
+      console.error('Error while handling subscription provisioning:', subErr);
+    }
+
     console.log(`Order ${orderId} updated with status: ${orderStatus}`);
     res.status(200).send('OK');
 
@@ -144,6 +284,56 @@ app.post('/payfast/webhook', async (req, res) => {
     res.status(500).send('Error processing webhook');
   }
 });
+
+// Create subscription intent (server-side pending subscription)
+app.post('/subscriptions/create-intent', async (req, res) => {
+  try {
+    const { user_id, subscription_plan_id, end_date } = req.body;
+    if (!user_id || !subscription_plan_id) return res.status(400).json({ error: 'user_id and subscription_plan_id required' });
+
+  const insertPayload: Record<string, unknown> = {
+      user_id,
+      subscription_plan_id,
+      status: 'pending',
+      payment_method: 'payfast',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (end_date) insertPayload.end_date = end_date;
+
+    const { data, error } = await supabase
+      .from('user_subscriptions')
+      .insert(insertPayload)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating subscription intent:', error);
+      return res.status(500).json({ error: error.message || 'Failed to create intent' });
+    }
+
+    return res.json(data);
+  } catch (err) {
+    console.error('create-intent error:', err);
+    return res.status(500).json({ error: 'internal' });
+  }
+});
+
+// Helper: cancel other active subscriptions for a user (exclude optional id)
+async function cancelOtherActiveSubscriptions(userId: string, excludeId?: string) {
+  try {
+    const query = supabase
+      .from('user_subscriptions')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('status', 'active');
+    if (excludeId) query.neq('id', excludeId);
+    const { error } = await query;
+    if (error) console.warn('Failed to cancel other active subscriptions:', error);
+  } catch (err) {
+    console.warn('cancelOtherActiveSubscriptions error:', err);
+  }
+}
 
 // Health check endpoint
 app.get('/health', (req, res) => {

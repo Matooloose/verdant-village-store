@@ -10,9 +10,6 @@ import {
   Leaf, 
   Eye, 
   EyeOff, 
-  Wifi, 
-  WifiOff, 
-  
   CheckCircle, 
   AlertCircle,
   Clock,
@@ -52,16 +49,7 @@ const Login = () => {
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
   const [deviceId, setDeviceId] = useState<string>("");
-  const [isOnline, setIsOnline] = useState(window.navigator.onLine);
-  useEffect(() => {
-    const updateOnlineStatus = () => setIsOnline(window.navigator.onLine);
-    window.addEventListener('online', updateOnlineStatus);
-    window.addEventListener('offline', updateOnlineStatus);
-    return () => {
-      window.removeEventListener('online', updateOnlineStatus);
-      window.removeEventListener('offline', updateOnlineStatus);
-    };
-  }, []);
+  // Removed online/offline wifi indicator logic
   
   // Refs for auto-fill optimization
   const emailRef = useRef<HTMLInputElement>(null);
@@ -303,24 +291,7 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
-        {/* Network Status Indicator */}
-        <div className={`fixed top-4 right-4 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-          isOnline 
-            ? 'bg-green-100 text-green-800 border border-green-200' 
-            : 'bg-red-100 text-red-800 border border-red-200'
-        }`}>
-          {isOnline ? (
-            <>
-              <Wifi className="h-4 w-4" />
-              Online
-            </>
-          ) : (
-            <>
-              <WifiOff className="h-4 w-4" />
-              Offline
-            </>
-          )}
-        </div>
+        {/* Removed Network Status Indicator */}
 
         {/* Logo */}
         <div className="text-center space-y-4">
@@ -449,12 +420,7 @@ const Login = () => {
                 </Link>
               </div>
 
-              {!isOnline && (
-                <div className="w-full mb-2 flex items-center justify-center">
-                  <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-                  <span className="text-red-500 text-sm">No Internet Connection</span>
-                </div>
-              )}
+              {/* Removed No Internet Connection warning */}
               <Button 
                 type="submit" 
                 className="w-full h-11 bg-gradient-to-r from-primary to-primary-light"

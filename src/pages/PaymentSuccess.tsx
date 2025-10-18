@@ -148,9 +148,10 @@ const PaymentSuccess = () => {
   const [isRecommendationsDialogOpen, setIsRecommendationsDialogOpen] = useState(false);
   const [isRecurringDialogOpen, setIsRecurringDialogOpen] = useState(false);
 
-  const loadOrderSummary = React.useCallback(async (orderId: string) : Promise<OrderSummary | null> => {
+  const loadOrderSummary = React.useCallback(async (orderId: string, providedUserId?: string) : Promise<OrderSummary | null> => {
     try {
-        if (!user?.id) {
+      const userId = providedUserId || user?.id;
+      if (!userId) {
         console.error('User ID is required to load order summary');
         return null;
       }
@@ -171,7 +172,7 @@ const PaymentSuccess = () => {
           )
         `)
         .eq('id', orderId)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single();
 
       if (error) throw error;
@@ -400,16 +401,34 @@ const PaymentSuccess = () => {
 
   useEffect(() => {
     const processPayment = async () => {
-      if (!user) {
-        navigate('/login');
-        return;
+      // Wait a short time for auth to initialize; do not block parameter parsing
+      let attempts = 0;
+      while (!user && attempts < 6) {
+        // give auth up to ~600ms to become available
+        await new Promise((res) => setTimeout(res, 100));
+        attempts += 1;
       }
 
-      try {
-        // Get payment details from URL params
-        const paymentId = searchParams.get('pf_payment_id');
-        const orderId = searchParams.get('custom_str1') || searchParams.get('order_id'); // Fallback to order_id parameter
-        const amount = searchParams.get('amount_gross');
+  try {
+  // Get payment details from URL params (router) but fallback to window.location.search
+  const uid = user?.id ?? '';
+  // If uid is empty we still attempt to continue, but queries will pass an empty string (safe guard)
+      const paymentId = searchParams.get('pf_payment_id') || new URLSearchParams(window.location.search).get('pf_payment_id');
+      let orderId = searchParams.get('custom_str1') || searchParams.get('order_id') || new URLSearchParams(window.location.search).get('custom_str1') || new URLSearchParams(window.location.search).get('order_id');
+      const amount = searchParams.get('amount_gross') || new URLSearchParams(window.location.search).get('amount_gross') || new URLSearchParams(window.location.search).get('pf_amount_gross');
+
+      // If PayFast did not include order id in return params, fall back to locally stored pending_order_id
+      if (!orderId) {
+        try {
+          const pending = localStorage.getItem('pending_order_id');
+          if (pending) {
+            console.log('Falling back to pending_order_id from localStorage:', pending);
+            orderId = pending;
+          }
+        } catch (e) {
+          console.warn('Could not read pending_order_id from localStorage', e);
+        }
+      }
 
         console.log('Payment Success URL params:', {
           paymentId,
@@ -444,8 +463,8 @@ const PaymentSuccess = () => {
           return;
         }
 
-        // Idempotency: avoid re-processing the same order in this browser session
-        const processedKey = orderId ? `payment_processed_${orderId}` : null;
+  // Idempotency: avoid re-processing the same order in this browser session
+  const processedKey = orderId ? `payment_processed_${orderId}` : null;
         if (processedKey && localStorage.getItem(processedKey)) {
           console.log('Order processing already handled in this session, skipping:', orderId);
           setLoading(false);
@@ -458,7 +477,7 @@ const PaymentSuccess = () => {
             .from('orders')
             .select('id, status')
             .eq('id', orderId)
-            .eq('user_id', user.id)
+            .eq('user_id', uid)
             .single();
 
           if (existingOrder && ['confirmed', 'delivered', 'processing'].includes(String(existingOrder.status))) {
@@ -466,7 +485,7 @@ const PaymentSuccess = () => {
             // Ensure we still load summary and recommendations for UX
             // Clear only the cart items that belong to this order's farms
             try {
-              const savedOrder = await loadOrderSummary(orderId);
+              const savedOrder = await loadOrderSummary(orderId, user?.id);
               if (savedOrder) {
                 const farms = Array.from(new Set(savedOrder.items.map((i: OrderItem) => i.farmName)));
                 farms.forEach(farm => {
@@ -476,6 +495,8 @@ const PaymentSuccess = () => {
             } catch (e) { console.warn('Could not selectively clear cart for confirmed order', getErrorMessage(e)); }
             setOrderCreated(true);
             const loaded = await loadOrderSummary(orderId);
+            // Clear pending_order_id if it matches processed order
+            try { if (localStorage.getItem('pending_order_id') === orderId) localStorage.removeItem('pending_order_id'); } catch (e) { console.warn('Could not clear pending_order_id', e); }
             await loadRecommendedProducts();
             loadDeliveryTips();
             // Only show recurring suggestion if order is eligible
@@ -487,7 +508,7 @@ const PaymentSuccess = () => {
           }
 
           // Update order status in database
-          const { error: orderError } = await supabase
+            const { error: orderError } = await supabase
             .from('orders')
             .update({
               status: 'processing',
@@ -496,7 +517,7 @@ const PaymentSuccess = () => {
               updated_at: new Date().toISOString()
             })
             .eq('id', orderId)
-            .eq('user_id', user.id);
+            .eq('user_id', uid);
 
           if (orderError) throw orderError;
         } catch (e) {
@@ -505,11 +526,11 @@ const PaymentSuccess = () => {
         }
 
   // Create payment record (only if we have payment ID from PayFast)
-        if (paymentId) {
+  if (paymentId) {
           try {
             const payload: PaymentsInsert = {
               order_id: orderId,
-              user_id: user.id,
+              user_id: uid,
               amount: Number.isFinite(Number(amount)) ? parseFloat(amount || '0') : 0,
               currency: 'ZAR',
               status: PaymentStatus.COMPLETED as unknown as string,
@@ -536,7 +557,7 @@ const PaymentSuccess = () => {
 
   // Clear cart items for the farms that were part of the order and set order data
         try {
-          const loaded = await loadOrderSummary(orderId);
+          const loaded = await loadOrderSummary(orderId, user?.id);
           if (loaded) {
             const farms = Array.from(new Set(loaded.items.map(i => i.farmName)));
             // clear only items from these farms
@@ -554,7 +575,7 @@ const PaymentSuccess = () => {
         setOrderCreated(true);
         
         // Load real order data
-  const loadedSummary = await loadOrderSummary(orderId);
+  const loadedSummary = await loadOrderSummary(orderId, user?.id);
   await loadRecommendedProducts();
   loadDeliveryTips();
   // Only suggest recurring orders for meaningful orders (e.g., > R100)
@@ -866,35 +887,7 @@ const PaymentSuccess = () => {
                   <ChevronRight className="h-4 w-4 ml-auto" />
                 </Button>
                 
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start"
-                  onClick={() => setIsRecurringDialogOpen(true)}
-                >
-                  <Repeat className="h-4 w-4 mr-2" />
-                  Set Up Recurring Order
-                  <ChevronRight className="h-4 w-4 ml-auto" />
-                </Button>
-
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start"
-                  onClick={() => setIsRecommendationsDialogOpen(true)}
-                >
-                  <ShoppingCart className="h-4 w-4 mr-2" />
-                  Recommended Products
-                  <ChevronRight className="h-4 w-4 ml-auto" />
-                </Button>
-
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start"
-                  onClick={() => navigate('/messages')}
-                >
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  Contact Support
-                  <ChevronRight className="h-4 w-4 ml-auto" />
-                </Button>
+                
               </CardContent>
             </Card>
 

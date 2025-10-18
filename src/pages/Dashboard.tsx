@@ -116,7 +116,7 @@ import { useWishlist } from "@/contexts/WishlistContext";
 import { useDebounce } from "@/hooks/useDebounce";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { supabase } from "../integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1751,13 +1751,45 @@ useEffect(() => {
                   <p className="font-medium text-xs">Subscriptions</p>
                 </CardContent>
               </Card>
-              <Card className="cursor-pointer hover:shadow-medium transition-shadow"
-                onClick={() => handleNavigation('/contact-support')}>
-                <CardContent className="p-3 text-center">
-                  <Headphones className="h-6 w-6 mx-auto mb-2 text-primary" />
-                  <p className="font-medium text-xs">Contact Support</p>
-                </CardContent>
-              </Card>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Card className="cursor-pointer hover:shadow-medium transition-shadow">
+                    <CardContent className="p-3 text-center">
+                      <Headphones className="h-6 w-6 mx-auto mb-2 text-primary" />
+                      <p className="font-medium text-xs">Contact Support</p>
+                    </CardContent>
+                  </Card>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Contact Support</DialogTitle>
+                    <DialogDescription>Choose how you'd like to get help</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold">Live Chat</p>
+                        <p className="text-sm text-muted-foreground">Chat with our support team</p>
+                      </div>
+                      <Button variant="outline" onClick={() => navigate('/messages?support=true')}>Open Chat</Button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold">Phone</p>
+                        <p className="text-sm text-muted-foreground">Call our support line</p>
+                      </div>
+                      <Button variant="outline" onClick={() => window.open('tel:+27123456789')}>Call</Button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold">Email</p>
+                        <p className="text-sm text-muted-foreground">Send us an email</p>
+                      </div>
+                      <Button variant="outline" onClick={() => window.location.href = 'mailto:support@verdantvillage.com'}>Email</Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
               <Card className="cursor-pointer hover:shadow-medium transition-shadow"
                 onClick={() => handleNavigation('/profile')}>
                 <CardContent className="p-3 text-center">

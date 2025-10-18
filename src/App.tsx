@@ -30,13 +30,13 @@ const Checkout = React.lazy(() => import("./pages/Checkout"));
 const UpdateProfile = React.lazy(() => import("./pages/UpdateProfile"));
 const Subscriptions = React.lazy(() => import("./pages/Subscriptions"));
 const Messages = React.lazy(() => import("./pages/Messages"));
+const RequireSubscription = React.lazy(() => import("./components/RequireSubscription"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
 const HowItWorks = React.lazy(() => import("./pages/HowItWorks"));
-const ContactSupport = React.lazy(() => import("./pages/ContactSupport"));
 const CustomerSupport = React.lazy(() => import("./pages/CustomerSupport"));
 const Wishlist = React.lazy(() => import("./pages/Wishlist"));
 const OrderHistory = React.lazy(() => import("./pages/OrderHistory"));
-const FAQ = React.lazy(() => import("./pages/FAQ"));
+// ContactSupport and FAQ routes removed; use modal-based support where needed
 const PaymentSuccess = React.lazy(() => import("./pages/PaymentSuccess"));
 const PaymentCancelled = React.lazy(() => import("./pages/PaymentCancelled"));
 const PayFastTest = React.lazy(() => import("./pages/PayFastTest"));
@@ -58,13 +58,27 @@ const DeepLinkHandler = () => {
     
     let listener: { remove?: () => void } | null = null;
     const handler = async ({ url }: { url: string }) => {
-      if (url.startsWith('farmersbracket://payment-success')) {
-        try { 
-          await Browser.close(); 
-        } catch {
-          // Ignore browser close errors
+      try {
+        // Attempt to parse custom-scheme URLs like: farmersbracket://payment-success?order_id=...
+        const m = String(url).match(/^([a-z0-9+.-]+):\/\/([^?]+)(?:\?(.*))?$/i);
+        if (!m) return;
+        const host = m[2];
+        const query = m[3] ? `?${m[3]}` : '';
+
+        if (host === 'payment-success') {
+          try { await Browser.close(); } catch (err) { /* ignore */ }
+          // Preserve query string when navigating into the SPA
+          navigate(`/payment-success${query}`);
+        } else if (host === 'payment-cancelled' || host === 'payment-cancel') {
+          try { await Browser.close(); } catch (err) { /* ignore */ }
+          navigate(`/payment-cancelled${query}`);
         }
-        navigate('/payment-success');
+      } catch (e) {
+        // best-effort: if parsing fails, fall back to simple navigation
+        if (String(url).startsWith('farmersbracket://payment-success')) {
+          try { await Browser.close(); } catch (err) { /* ignore */ }
+          navigate('/payment-success');
+        }
       }
     };
     
@@ -137,13 +151,16 @@ const App = () => {
                       <Route path="/profile" element={<UpdateProfile />} />
                       <Route path="/update-profile" element={<UpdateProfile />} />
                       <Route path="/subscriptions" element={<Subscriptions />} />
-                      <Route path="/messages" element={<Messages />} />
+                      <Route path="/messages" element={
+                        <RequireSubscription>
+                          <Messages />
+                        </RequireSubscription>
+                      } />
                       <Route path="/wishlist" element={<Wishlist />} />
                       <Route path="/order-history" element={<OrderHistory />} />
                       <Route path="/how-it-works" element={<HowItWorks />} />
-                      <Route path="/contact-support" element={<ContactSupport />} />
                       <Route path="/customer-support" element={<CustomerSupport />} />
-                      <Route path="/faq" element={<FAQ />} />
+                      {/* /contact-support and /faq routes removed - support handled via modal in pages */}
                       <Route path="/product/:productId/reviews" element={<ProductReviews />} />
                       <Route path="/farmer/:farmerId" element={<FarmerProfile />} />
                       <Route path="/payment-success" element={<PaymentSuccess />} />

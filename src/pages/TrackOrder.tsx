@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Order } from "@/types/order";
 import { ArrowLeft, Package, Truck, CheckCircle, Clock, Phone, MessageCircle, MapPin, Calendar, Info, Package2, ShoppingCart, Printer } from "lucide-react";
+import ContactSupportDialog from '@/components/ContactSupportDialog';
 import BottomNavBar from "@/components/BottomNavBar";
 import InvoiceReceipt from "@/components/InvoiceReceipt";
 
@@ -71,6 +72,7 @@ const TrackOrder = () => {
   const [recurring, setRecurring] = useState<RecurringInfo>(null);
   const [loading, setLoading] = useState(true);
   const [customer, setCustomer] = useState<{ name?: string; email?: string; phone?: string; shippingAddress?: string } | null>(null);
+  const [isContactOpen, setIsContactOpen] = useState(false);
 
   const loadOrder = useCallback(async () => {
     if (!orderId || !user?.id) return;
@@ -724,10 +726,11 @@ const TrackOrder = () => {
           </CardHeader>
           <CardContent>
             <div className="flex justify-center">
-              <Button variant="outline" className="flex items-center gap-2" onClick={() => navigate('/contact-support')}>
+              <Button variant="outline" className="flex items-center gap-2" onClick={() => setIsContactOpen(true)}>
                 <Phone className="h-4 w-4" />
                 Call Support
               </Button>
+              <ContactSupportDialog open={isContactOpen} onOpenChange={setIsContactOpen} />
             </div>
           </CardContent>
         </Card>
