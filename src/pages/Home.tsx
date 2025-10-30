@@ -139,7 +139,7 @@ const Home = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b shadow-soft">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-soft">
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>

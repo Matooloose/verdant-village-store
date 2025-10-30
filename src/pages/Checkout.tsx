@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getStripe, confirmStripePayment, createPaymentIntent } from "../lib/stripePayment";
 import { payFastService, PAYFAST_CONFIG } from "../lib/payfast";
@@ -50,7 +50,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/errorUtils";
 import { Browser } from '@capacitor/browser';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
+import { App } from '@capacitor/app';
 import { useCart, FarmGroup } from "@/contexts/CartContext";
 import { useAppState } from "@/contexts/AppStateContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -389,10 +390,124 @@ const Checkout = () => {
     }
   }, [user]);
 
+  // Sanitize phone input: allow digits and an optional leading '+' only
+  const sanitizePhoneInput = (value: string) => {
+    if (!value) return '';
+    // remove whitespace
+    const v = value.replace(/\s+/g, '');
+    if (v.startsWith('+')) {
+      // keep leading +, strip any non-digit after
+      return '+' + v.slice(1).replace(/\D/g, '');
+    }
+    // otherwise keep digits only
+    return v.replace(/\D/g, '');
+  };
+
+  // Poll the order status from Supabase and navigate based on result
+  const checkPaymentStatus = useCallback(async (orderId: string) => {
+    try {
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select('status, payment_status')
+        .eq('id', orderId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching order status:', error);
+        return;
+      }
+
+      if (order) {
+        const paymentStatus = String(order.payment_status || '').toLowerCase();
+        const orderStatus = String(order.status || '').toLowerCase();
+
+        if (paymentStatus === 'completed' || orderStatus === 'processing' || orderStatus === 'confirmed') {
+          navigate(`/payment-success?order_id=${orderId}`);
+          return;
+        }
+
+        if (paymentStatus === 'failed' || orderStatus === 'cancelled' || paymentStatus === 'cancelled') {
+          navigate(`/payment-cancelled?order_id=${orderId}`);
+          return;
+        }
+
+        // Still pending — show a short message and poll again
+        toast({ title: 'Checking Payment Status', description: 'Please wait while we confirm your payment...' });
+        setTimeout(() => checkPaymentStatus(orderId), 2000);
+      }
+    } catch (err) {
+      console.error('checkPaymentStatus error:', err);
+    }
+  }, [navigate, toast]);
+
+  // Deep link handler for mobile (Capacitor). Listens for appUrlOpen and navigates to payment results.
+  useEffect(() => {
+    let urlListener: PluginListenerHandle | undefined;
+    try {
+      urlListener = App.addListener('appUrlOpen', (event: { url: string }) => {
+        try {
+          console.log('App opened with URL:', event.url);
+          const normalized = event.url.replace('farmersbracket://', 'https://dummy.com/');
+          const parsed = new URL(normalized);
+          const orderId = parsed.searchParams.get('order_id') || parsed.searchParams.get('custom_str1');
+          if (event.url.includes('payment-success')) {
+            navigate(`/payment-success?order_id=${orderId}`);
+          } else if (event.url.includes('payment-cancelled')) {
+            navigate(`/payment-cancelled?order_id=${orderId}`);
+          }
+        } catch (e) {
+          console.warn('Failed to parse deep link URL', e);
+        }
+      });
+    } catch (err) {
+      console.warn('App.addListener(appUrlOpen) not available on this platform', err);
+    }
+
+    return () => {
+      try { urlListener?.remove(); } catch (e) { /* ignore */ }
+    };
+  }, [navigate]);
+
+  // Listen for in-app browser close (fallback) and poll status
+  useEffect(() => {
+    let browserListener: PluginListenerHandle | undefined;
+    const setupBrowserListener = async () => {
+      try {
+        // some Capacitor versions support 'browserFinished'
+  // @ts-expect-error: browserFinished event may not exist on all Browser plugin versions
+  browserListener = await Browser.addListener('browserFinished', () => {
+          console.log('Browser closed by user');
+          try {
+            const pendingOrderId = localStorage.getItem('pending_order_id');
+            if (pendingOrderId) checkPaymentStatus(pendingOrderId);
+          } catch (err) {
+            console.warn('Error reading pending_order_id on browserFinished', err);
+          }
+        });
+      } catch (err) {
+        console.warn('Browser.addListener(browserFinished) not available, will rely on polling fallback', err);
+      }
+    };
+
+    setupBrowserListener();
+
+    return () => {
+      try { browserListener?.remove(); } catch (e) { /* ignore */ }
+    };
+  }, [checkPaymentStatus]);
+
   const validateCheckout = () => {
     const errors: Record<string, string> = {};
     if (!formData.fullName) errors.fullName = "Full name is required.";
-    if (!formData.phoneNumber) errors.phoneNumber = "Phone number is required.";
+    if (!formData.phoneNumber) {
+      errors.phoneNumber = "Phone number is required.";
+    } else {
+      // Validate South African phone formats: 0######### or +27######### (0 + 9 digits, or +27 + 9 digits)
+      const saRegex = /^(0\d{9}|\+27\d{9})$/;
+      if (!saRegex.test(formData.phoneNumber)) {
+        errors.phoneNumber = "Enter a valid South African phone (e.g. 0812345678 or +27812345678).";
+      }
+    }
     // Address is only required for delivery, not collection
     if (deliveryMethod === 'delivery' && !formData.address) errors.address = "Delivery address is required.";
     if (!formData.email) errors.email = "Email is required.";
@@ -641,22 +756,24 @@ const Checkout = () => {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto max-w-6xl p-4">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <Button
-            variant="ghost"
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            <span className="hidden sm:inline">Back</span>
-          </Button>
-          <h1 className="text-3xl font-bold text-foreground">
-            {selectedFarmGroup 
-              ? `Checkout - ${selectedFarmGroup.farmName}` 
-              : "Checkout"
-            }
-          </h1>
-        </div>
+        <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-sm">
+          <div className="flex items-center gap-4 px-4 py-3">
+            <Button
+              variant="ghost"
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              <span className="hidden sm:inline">Back</span>
+            </Button>
+            <h1 className="text-3xl font-bold text-foreground">
+              {selectedFarmGroup 
+                ? `Checkout - ${selectedFarmGroup.farmName}` 
+                : "Checkout"
+              }
+            </h1>
+          </div>
+        </header>
 
         {/* Check if cart is empty */}
         {checkoutItems.length === 0 ? (
@@ -805,8 +922,10 @@ const Checkout = () => {
                       <Input
                         id="phoneNumber"
                         value={formData.phoneNumber}
-                        onChange={e => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
-                        placeholder="Enter your phone number"
+                        onChange={e => setFormData(prev => ({ ...prev, phoneNumber: sanitizePhoneInput(e.target.value) }))}
+                        placeholder="e.g. 0812345678 or +27812345678"
+                        inputMode="tel"
+                        maxLength={13}
                         className={validationErrors.phoneNumber ? "border-destructive" : ""}
                       />
                       {validationErrors.phoneNumber && (
@@ -1140,20 +1259,8 @@ const Checkout = () => {
                     Secure checkout powered by industry-standard encryption
                   </div>
 
-                  {/* Test button for Capacitor Browser */}
-                  <Button
-                    type="button"
-                    className="w-full mt-2 bg-primary text-primary-foreground"
-                    onClick={async () => {
-                      try {
-                        await Browser.open({ url: 'https://google.com' });
-                      } catch (err) {
-                        alert('Failed to open Capacitor Browser: ' + err);
-                      }
-                    }}
-                  >
-                    Test Capacitor Browser (Google)
-                  </Button>
+                 
+                  
                 </CardContent>
               </Card>
             </div>

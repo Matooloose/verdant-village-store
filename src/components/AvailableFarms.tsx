@@ -21,10 +21,16 @@ interface FarmerProfile {
   image_url?: string;
 }
 
+interface ProductCountRow {
+  id: string;
+  farmer_id?: string | null;
+}
+
 const AvailableFarms = () => {
   const [farms, setFarms] = useState<Farm[]>([]);
   const [loading, setLoading] = useState(true);
   const [farmerProfiles, setFarmerProfiles] = useState<Record<string, FarmerProfile>>({});
+  const [productCounts, setProductCounts] = useState<Record<string, number>>({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -56,6 +62,27 @@ const AvailableFarms = () => {
             if (profileError) {
               console.error('Error fetching farmer profiles:', profileError);
             }
+            // Fetch product counts for each farmer to show availability on farm cards
+            try {
+              const { data: products, error: productsError } = await supabase
+                .from('products')
+                .select('farmer_id,id')
+                .in('farmer_id', farmerIds);
+
+              if (productsError) {
+                console.error('Error fetching products for counts:', productsError);
+              } else if (products) {
+                const counts: Record<string, number> = {};
+                (products as ProductCountRow[]).forEach((p) => {
+                  const fid = p?.farmer_id;
+                  if (!fid) return;
+                  counts[fid] = (counts[fid] || 0) + 1;
+                });
+                setProductCounts(counts);
+              }
+            } catch (err) {
+              console.error('Error fetching product counts:', err);
+            }
           }
         }
       } catch (error) {
@@ -68,7 +95,8 @@ const AvailableFarms = () => {
   }, []);
 
   const handleFarmClick = (farm: Farm) => {
-    navigate(`/farmer/${farm.farmer_id}`);
+    // Navigate to farm detail page (consistent with AllFarms.tsx)
+    navigate(`/farms/${farm.id}`);
   };
 
   if (loading) {
@@ -117,9 +145,7 @@ const AvailableFarms = () => {
                 ) : (
                   <Leaf className="h-12 w-12 text-primary opacity-80" />
                 )}
-                <div className="absolute top-2 right-2 bg-primary/90 text-primary-foreground px-2 py-1 rounded-full text-xs font-medium">
-                  Farm #{index + 1}
-                </div>
+               
               </div>
               <div className="p-5">
                 <h4 className="font-bold text-xl text-foreground truncate mb-2">{farm.name}</h4>
@@ -133,6 +159,9 @@ const AvailableFarms = () => {
                     <span className="font-medium mr-1">🌍</span> {farm.location}
                   </p>
                 )}
+                <p className="text-xs text-muted-foreground mb-2">
+                  {productCounts[farm.farmer_id] ? `${productCounts[farm.farmer_id]} items available` : '0 items available'}
+                </p>
                 <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed mb-3">
                   {farm.description || "🌱 Discover fresh, local produce from this amazing farm!"}
                 </p>

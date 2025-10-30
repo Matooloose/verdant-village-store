@@ -1,215 +1,104 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Package, Plus, Minus, Heart, MapPin, Star, MessageSquare } from "lucide-react";
-import { ProductRating } from "@/components/ProductRating";
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Package, Heart, X } from 'lucide-react';
 
-interface Product {
+type Product = {
   id: string;
   name: string;
-  description: string | null;
+  description?: string | null;
   price: number;
   unit: string;
-  category: string;
-  images: string[];
-  is_organic: boolean;
-  is_featured: boolean;
-  farmer_id: string;
-  quantity: number;
-}
+  images?: string[];
+};
 
-interface ProductQuickViewProps {
+type Props = {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
   onAddToCart: (productId: string, quantity: number) => void;
   onAddToWishlist: (productId: string) => void;
-  isInWishlist: boolean;
-  isAddingToCart: boolean;
+  isInWishlist?: boolean;
+  isAddingToCart?: boolean;
   farmName?: string;
-}
+};
 
-const ProductQuickView: React.FC<ProductQuickViewProps> = ({
+/**
+ * Compact Product Quick View
+ * - Fixed quantity = 1 for quick-add
+ * - Small footprint, responsive, non-overlapping
+ */
+const ProductQuickView: React.FC<Props> = ({
   product,
   isOpen,
   onClose,
   onAddToCart,
   onAddToWishlist,
-  isInWishlist,
-  isAddingToCart,
-  farmName = "Local Farm"
+  isInWishlist = false,
+  isAddingToCart = false,
+  farmName = 'Local Farm'
 }) => {
-  const [selectedQuantity, setSelectedQuantity] = React.useState(1);
   const navigate = useNavigate();
 
   if (!product) return null;
 
-  const handleQuantityChange = (delta: number) => {
-    const newQuantity = Math.max(1, Math.min(product.quantity, selectedQuantity + delta));
-    setSelectedQuantity(newQuantity);
-  };
-
-  const handleAddToCart = () => {
-    onAddToCart(product.id, selectedQuantity);
+  const handleAdd = () => {
+    onAddToCart(product.id, 1);
     onClose();
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-left">{product.name}</DialogTitle>
-          <DialogDescription className="text-left">
-            Quick view for {product.name} - R{product.price}/{product.unit} from {farmName}
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          {/* Product Image */}
-          <div className="aspect-square bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg flex items-center justify-center overflow-hidden">
-            {product.images.length > 0 ? (
-              <img 
-                src={product.images[0]} 
-                alt={product.name} 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <Package className="h-16 w-16 text-primary/40" />
-            )}
-          </div>
-
-          {/* Badges */}
-          <div className="flex gap-2 flex-wrap">
-            {product.is_organic && (
-              <Badge variant="secondary" className="text-xs">🌱 Organic</Badge>
-            )}
-            {product.is_featured && (
-              <Badge variant="default" className="text-xs">⭐ Featured</Badge>
-            )}
-            <Badge variant="outline" className="text-xs">{product.category}</Badge>
-          </div>
-
-          {/* Price and Farm Info */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold text-primary">
-                  R{product.price}/{product.unit}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {product.quantity} {product.unit} available
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onAddToWishlist(product.id)}
-                className="p-2"
-                aria-label={isInWishlist ? "Remove from wishlist" : "Add to wishlist"}
-              >
-                <Heart 
-                  className={`h-5 w-5 ${isInWishlist ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`} 
-                />
-              </Button>
-            </div>
-            
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <MapPin className="h-4 w-4" />
-              <span>{farmName}</span>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Description */}
-          <div>
-            <h4 className="font-semibold mb-2">Description</h4>
-            <p className="text-sm text-muted-foreground">{product.description || 'No description available'}</p>
-          </div>
-
-          {/* Product Rating */}
-          <div className="space-y-3">
-            <h4 className="font-semibold">Customer Reviews</h4>
-            <ProductRating productId={product.id} compact={false} showReviews={false} />
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                onClose();
-                navigate(`/product/${product.id}/reviews`);
-              }}
-              className="w-full"
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              View All Reviews
-            </Button>
-          </div>
-
-          <Separator />
-
-          {/* Quantity Selector */}
-          <div className="space-y-3">
-            <h4 className="font-semibold">Quantity</h4>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange(-1)}
-                disabled={selectedQuantity <= 1}
-                className="h-8 w-8 p-0"
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <span className="text-lg font-semibold min-w-[2rem] text-center">
-                {selectedQuantity}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange(1)}
-                disabled={selectedQuantity >= product.quantity}
-                className="h-8 w-8 p-0"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground ml-2">
-                {product.unit}
-              </span>
-            </div>
-            
-            {/* Total Price */}
-            <div className="text-right">
-              <p className="text-lg font-bold text-primary">
-                Total: R{(product.price * selectedQuantity).toFixed(2)}
-              </p>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-2 pt-4">
+  <DialogContent hideClose className="w-full max-w-sm sm:max-w-md max-h-[70vh] overflow-hidden">
+        {/* Provide an accessible DialogTitle for Radix (screen readers). Hidden visually to avoid duplicate title UI. */}
+        <DialogTitle className="sr-only">{product.name}</DialogTitle>
+        <div className="flex flex-col sm:flex-row gap-4 p-3">
+          <div className="relative w-full sm:w-1/2 rounded-md overflow-hidden bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center min-h-[120px]">
+            {/* Quick close button positioned over image so it's always visible */}
             <Button
-              onClick={handleAddToCart}
-              disabled={isAddingToCart}
-              className="flex-1"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              aria-label="Close quick view"
+              className="absolute right-2 top-2 z-50 bg-background/80"
             >
-              {isAddingToCart ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent mr-2" />
-                  Adding...
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add to Cart
-                </>
-              )}
+              <X className="h-4 w-4" />
             </Button>
-            <Button variant="outline" onClick={onClose}>
-              Close
-            </Button>
+            {product.images && product.images.length > 0 ? (
+              <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover" />
+            ) : (
+              <Package className="h-12 w-12 text-primary/40" />
+            )}
+          </div>
+
+          <div className="flex-1 flex flex-col justify-between">
+            <div>
+              <h3 className="font-semibold text-lg line-clamp-2">{product.name}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{farmName}</p>
+              <p className="text-primary font-semibold mt-2">R{product.price}/{product.unit}</p>
+              <p className="text-sm text-muted-foreground mt-2 line-clamp-3">{product.description || 'No description available'}</p>
+            </div>
+
+            <div className="flex items-center gap-2 mt-3">
+              <Button onClick={handleAdd} className="flex-1" disabled={isAddingToCart}>
+                {isAddingToCart ? 'Adding...' : 'Add to Cart'}
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => {
+                  onClose();
+                  navigate(`/product/${product.id}`);
+                }}
+              >
+                Details
+              </Button>
+
+              <Button variant="ghost" onClick={() => onAddToWishlist(product.id)} aria-label="Toggle wishlist">
+                <Heart className={`h-4 w-4 ${isInWishlist ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`} />
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

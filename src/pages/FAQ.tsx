@@ -261,7 +261,7 @@ const FAQ = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b shadow-sm">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-sm">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

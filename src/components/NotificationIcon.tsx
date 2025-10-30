@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAppState } from "@/contexts/AppStateContext";
+import { relativeTime } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 
 export const NotificationIcon = () => {
@@ -18,11 +19,15 @@ export const NotificationIcon = () => {
   const unreadCount = getUnreadCount();
 
   const handleNotificationClick = (id: string, action_url?: string) => {
-    markNotificationAsRead(id);
     if (action_url) {
+      // Defer marking as read until after navigation completes (App route sync will mark it read)
+      if (setLastClickedNotificationId) setLastClickedNotificationId(id);
       // close popover and navigate
       setOpen(false);
       navigate(action_url);
+    } else {
+      // No action URL: mark read immediately
+      markNotificationAsRead(id);
     }
   };
 
@@ -94,11 +99,7 @@ export const NotificationIcon = () => {
                         {notification.message}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {notification.timestamp.toLocaleDateString()} at{' '}
-                        {notification.timestamp.toLocaleTimeString([], { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
+                        {relativeTime(notification.timestamp)}
                       </p>
                     </div>
                     {!notification.read && (

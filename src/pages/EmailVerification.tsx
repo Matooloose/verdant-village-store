@@ -289,5 +289,3 @@ const EmailVerification: React.FC = () => {
 // Render dialog outside the main return is not needed; we'll include it inside the component JSX
 
 export default EmailVerification;
-
-export default EmailVerification;

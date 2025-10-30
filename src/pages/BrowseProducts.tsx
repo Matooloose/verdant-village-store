@@ -633,8 +633,8 @@ if (loading) {
 }
 
 return (
-  <div className="min-h-screen bg-background p-2 sm:p-4 pb-20">
-    <div className="container mx-auto max-w-full px-2 sm:px-4">
+  <div className="min-h-screen bg-background p-4 pb-20">
+    <div className="container mx-auto max-w-6xl px-4">
       <div className="flex items-center gap-4 mb-6">
         <Button
           variant="ghost"
@@ -720,8 +720,8 @@ return (
           <h3 className="text-xl font-semibold text-foreground mb-2">No products found</h3>
           <p className="text-muted-foreground">Try adjusting your search or filters</p>
         </div>
-      ) : (
-        <div className={`grid gap-3 ${
+        ) : (
+        <div className={`grid gap-2 ${
           viewMode === 'grid'
             ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
             : 'grid-cols-1'

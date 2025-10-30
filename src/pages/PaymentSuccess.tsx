@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { PaymentStatus } from "@/lib/payfast";
 import confetti from 'canvas-confetti';
-import { addDays, addWeeks } from 'date-fns';
+import { addDays, addWeeks, addMonths } from 'date-fns';
 
 // Enhanced interfaces
 interface OrderItem {
@@ -198,6 +198,44 @@ const PaymentSuccess = () => {
         });
 
         // Transform order data
+        // Compute items subtotal from order_items (unit_price * quantity)
+        const itemsSubtotal = (orderTyped.order_items || []).reduce((sum, it) => {
+          const unit = (it.unit_price || 0) as number;
+          const qty = (it.quantity || 0) as number;
+          return sum + (unit * qty);
+        }, 0);
+
+        // Prefer an explicit delivery_fee column if present. Otherwise prefer the pending
+        // payment amount (set by Checkout) and finally derive from order.total.
+        let deliveryFeeCalculated = 0;
+        try {
+          const od = orderData as Record<string, unknown>;
+          const deliveryField = od['delivery_fee'] ?? od['shipping_fee'] ?? od['deliveryCost'] ?? od['deliveryCostR'];
+          if (deliveryField !== undefined && deliveryField !== null) {
+            const parsed = typeof deliveryField === 'number' ? deliveryField : Number(String(deliveryField));
+            deliveryFeeCalculated = Number(parsed) || 0;
+          } else {
+            // Fallback 1: prefer the pending payment amount stored by checkout if available
+            let pendingAmount: number | null = null;
+            try {
+              const stored = localStorage.getItem('pending_payment_amount');
+              if (stored) pendingAmount = Number(stored);
+            } catch (e) {
+              // ignore localStorage errors
+            }
+
+            if (pendingAmount !== null && !Number.isNaN(pendingAmount)) {
+              deliveryFeeCalculated = Number((pendingAmount - itemsSubtotal).toFixed(2));
+            } else {
+              // Fallback 2: derive from order total in DB
+              deliveryFeeCalculated = Number(((orderData.total || 0) - itemsSubtotal).toFixed(2));
+            }
+          }
+        } catch (e) {
+          deliveryFeeCalculated = Number(((orderData.total || 0) - itemsSubtotal).toFixed(2));
+        }
+        if (!isFinite(deliveryFeeCalculated) || Number.isNaN(deliveryFeeCalculated)) deliveryFeeCalculated = 0;
+
         const transformedOrder: OrderSummary = {
           id: orderData.id,
           orderNumber: orderData.id.substring(0, 8).toUpperCase(),
@@ -217,10 +255,10 @@ const PaymentSuccess = () => {
               image: item.products?.images?.[0] || '/placeholder.svg'
             };
           }),
-          subtotal: orderData.total,
-          deliveryFee: 25.00, // Default delivery fee
+          subtotal: itemsSubtotal,
+          deliveryFee: deliveryFeeCalculated,
           discount: 0,
-          tax: orderData.total * 0.15, // 15% tax
+          tax: 0,
           total: orderData.total,
           estimatedDelivery: addDays(new Date(), 2).toISOString(),
           farmDetails: [], // Will be populated from items
@@ -417,6 +455,9 @@ const PaymentSuccess = () => {
       let orderId = searchParams.get('custom_str1') || searchParams.get('order_id') || new URLSearchParams(window.location.search).get('custom_str1') || new URLSearchParams(window.location.search).get('order_id');
       const amount = searchParams.get('amount_gross') || new URLSearchParams(window.location.search).get('amount_gross') || new URLSearchParams(window.location.search).get('pf_amount_gross');
 
+      // Also check for subscription plan return (subscriptions flow passes plan_id)
+      const planId = searchParams.get('plan_id') || new URLSearchParams(window.location.search).get('plan_id');
+
       // If PayFast did not include order id in return params, fall back to locally stored pending_order_id
       if (!orderId) {
         try {
@@ -453,6 +494,52 @@ const PaymentSuccess = () => {
           
           // Continue with success flow even without PayFast payment_id
         } else if (!orderId) {
+          // If this is a subscription flow (we passed plan_id in return_url), attempt to activate subscription
+          if (planId) {
+            console.log('Detected subscription flow via plan_id:', planId);
+            toast({ title: 'Activating subscription', description: 'Finalizing your subscription...' });
+            try {
+              // Attempt to load subscription plan to compute end_date
+              const { data: planRow, error: planErr } = await supabase
+                .from('subscription_plans')
+                .select('id, duration_months')
+                .eq('id', planId)
+                .maybeSingle();
+
+              if (planErr) throw planErr;
+
+              const startDate = new Date().toISOString();
+              const endDate = planRow && planRow.duration_months && Number(planRow.duration_months) > 0
+                ? addMonths(new Date(), Number(planRow.duration_months)).toISOString()
+                : null;
+
+              // Insert user subscription record (this requires your DB to allow authenticated inserts or an RPC)
+              const { data: subData, error: subErr } = await supabase
+                .from('user_subscriptions')
+                .insert([{ user_id: uid, subscription_plan_id: planId, status: 'active', start_date: startDate, end_date: endDate }])
+                .select()
+                .maybeSingle();
+
+              if (subErr) {
+                console.error('Failed to create user subscription from client:', subErr);
+                toast({ title: 'Subscription Activation Failed', description: 'Please contact support.', variant: 'destructive' });
+                navigate('/payment-cancelled?reason=subscription_activation_failed');
+                return;
+              }
+
+              // Optionally persist a flag and navigate to subscriptions/messages
+              try { localStorage.setItem('subscription_activated_at', Date.now().toString()); } catch (e) { /* ignore */ }
+              toast({ title: 'Subscription Active', description: 'Your subscription is now active. Enjoy chatting!' });
+              navigate('/subscriptions');
+              return;
+            } catch (err) {
+              console.error('Subscription activation error:', err);
+              toast({ title: 'Subscription Error', description: 'Could not activate subscription automatically. Please contact support.', variant: 'destructive' });
+              navigate('/payment-cancelled?reason=missing_order_info');
+              return;
+            }
+          }
+
           console.log('No order ID found in payment success');
           toast({
             title: "Order Information Missing",
@@ -686,7 +773,7 @@ const PaymentSuccess = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-card border-b shadow-sm">
+  <header className="page-topbar sticky top-0 z-40 bg-card border-b shadow-sm">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -703,10 +790,6 @@ const PaymentSuccess = () => {
               <Button variant="outline" size="sm" onClick={() => setIsReceiptDialogOpen(true)}>
                 <Receipt className="h-4 w-4 mr-2" />
                 Receipt
-              </Button>
-              <Button size="sm" onClick={() => navigate(`/track-order/${orderSummary?.id}`)}>
-                <Package className="h-4 w-4 mr-2" />
-                Track Order
               </Button>
             </div>
           </div>
@@ -808,10 +891,7 @@ const PaymentSuccess = () => {
                         <span>{formatPrice(orderSummary.discount)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between">
-                      <span>Tax:</span>
-                      <span>{formatPrice(orderSummary.tax)}</span>
-                    </div>
+                    {/* Tax removed from summary as requested */}
                     <Separator />
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total:</span>

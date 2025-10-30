@@ -468,6 +468,14 @@ const Messages: React.FC = () => {
     }
   }, [user, checkSubscription]);
 
+  // If subscription is inactive (once we know), redirect to subscriptions page.
+  useEffect(() => {
+    if (loading) return; // wait until we know
+    if (!hasSubscription) {
+      navigate('/subscriptions');
+    }
+  }, [loading, hasSubscription, navigate]);
+
   // Listen for cross-tab or in-page subscription changes and re-check immediately
   useEffect(() => {
     const onChange = () => {
@@ -551,7 +559,7 @@ const Messages: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 bg-card border-b">
+    <header className="page-topbar sticky top-0 z-50 bg-card border-b">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center">
               <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -579,7 +587,7 @@ const Messages: React.FC = () => {
   if (!hasSubscription) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 bg-card border-b">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center">
               <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -627,7 +635,7 @@ const Messages: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b shadow-sm">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-sm">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

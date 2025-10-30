@@ -55,11 +55,11 @@ const ProductCard: React.FC<ProductCardProps> = memo(({
 
   return (
     <Card 
-      className={`group cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${className}`}
+      className={`group cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${className} h-full flex flex-col`}
       onClick={handleCardClick}
     >
-      <CardContent className="p-4">
-        <div className="space-y-3">
+      <CardContent className="p-3 flex-1 flex flex-col justify-between">
+        <div className="space-y-3 h-full">
           {/* Product Image */}
           <div className="relative aspect-square overflow-hidden rounded-lg">
             <OptimizedImage
@@ -100,7 +100,7 @@ const ProductCard: React.FC<ProductCardProps> = memo(({
           </div>
 
           {/* Product Info */}
-          <div className="space-y-2">
+          <div className="space-y-2 flex-1 flex flex-col justify-between">
             <div className="flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-sm truncate">{product.name}</h3>

@@ -125,7 +125,7 @@ const Cart = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b shadow-soft">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-soft">
         <div className="flex items-center justify-between p-4">
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />

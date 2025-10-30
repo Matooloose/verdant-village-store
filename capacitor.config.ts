@@ -6,7 +6,12 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    cleartext: true
+    cleartext: true,
+    allowNavigation: [
+      'https://sandbox.payfast.co.za',
+      'https://www.payfast.co.za',
+      'https://paying-project.onrender.com'
+    ]
   },
   plugins: {
     SplashScreen: {

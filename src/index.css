@@ -217,4 +217,13 @@ Green-themed design with semantic tokens for agriculture marketplace
   .safe-area-right {
     padding-right: env(safe-area-inset-right);
   }
+
+  /* Global page topbar utility - apply to page header elements to make them sticky */
+  .page-topbar {
+    position: sticky;
+    top: calc(env(safe-area-inset-top) + 0px);
+    z-index: 60;
+    background: hsl(var(--card));
+    border-bottom: 1px solid hsl(var(--border) / 0.8);
+  }
 }

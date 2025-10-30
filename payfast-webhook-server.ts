@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'crypto';
+import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 
 const app = express();
@@ -15,6 +16,95 @@ const PAYFAST_PASSPHRASE = process.env.PAYFAST_PASSPHRASE || 'jt7NOE43FZPn';
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cors());
+
+// Helper to build PayFast-style signature from headers+body and passphrase
+function buildPayfastSignature(values: Record<string, unknown>, passphrase = ''): string {
+  // Alphabetise keys
+  const keys = Object.keys(values).sort();
+  let out = '';
+  for (const k of keys) {
+    const v = values[k];
+    if (v === undefined || v === null || v === '') continue;
+    out += `${k}=${encodeURIComponent(String(v)).replace(/%20/g, '+')}&`;
+  }
+  if (passphrase) {
+    out += `passphrase=${encodeURIComponent(passphrase).replace(/%20/g, '+')}`;
+  } else {
+    // remove trailing & when no passphrase appended
+    out = out.replace(/&$/, '');
+  }
+  return crypto.createHash('md5').update(out).digest('hex').toLowerCase();
+}
+
+// Proxy helper: forward request to PayFast subscriptions endpoints with required headers
+async function forwardToPayfast(req: express.Request, res: express.Response, action: string) {
+  try {
+    const token = req.params.token;
+    const pfBase = process.env.PAYFAST_API_BASE || 'https://api.payfast.co.za';
+    // Build target URL (append ?testing=true for sandbox convenience)
+    const targetUrl = `${pfBase}/subscriptions/${token}/${action}?testing=true`;
+
+    // Collect header params expected by PayFast
+    const merchantId = (req.headers['merchant-id'] as string) || process.env.PAYFAST_MERCHANT_ID || process.env.PAYFAST_MERCHANT_ID || '';
+    const version = (req.headers['version'] as string) || process.env.PAYFAST_API_VERSION || 'v1';
+    const timestamp = (req.headers['timestamp'] as string) || new Date().toISOString();
+    const passphrase = process.env.PAYFAST_PASSPHRASE || '';
+
+    // Build signature from headers + body params
+    const signatureInputs: Record<string, unknown> = {
+      'merchant-id': merchantId,
+      version,
+      timestamp,
+      // include body props if present
+      ...(req.method !== 'GET' && req.body && typeof req.body === 'object' ? req.body : {}),
+    };
+
+    const signature = buildPayfastSignature(signatureInputs, passphrase);
+
+    // Build outgoing headers
+    const outHeaders: Record<string, string> = {
+      'merchant-id': merchantId,
+      version,
+      timestamp,
+      signature,
+      'Content-Type': req.method === 'GET' ? 'application/json' : (req.headers['content-type'] as string) || 'application/json',
+    };
+
+    // Forward request using fetch
+    const fetchOptions: Record<string, unknown> = {
+      method: req.method,
+      headers: outHeaders,
+    };
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      // PayFast expects form-encoded or JSON depending on API; send JSON for simplicity
+      fetchOptions.body = JSON.stringify(req.body || {});
+    }
+
+    const resp = await fetch(targetUrl, fetchOptions);
+    const text = await resp.text();
+    // Try to parse as JSON when possible
+    try {
+      const json = JSON.parse(text);
+      res.status(resp.status).json(json);
+    } catch (e) {
+      res.status(resp.status).type('text').send(text);
+    }
+  } catch (err) {
+    console.error('PayFast proxy error:', err);
+    res.status(502).json({ error: 'Bad gateway', details: String(err) });
+  }
+}
+
+// Supported subscription actions
+const subscriptionActions = new Set(['fetch', 'pause', 'unpause', 'cancel', 'update', 'adhoc']);
+
+// Route that proxies various subscription actions to PayFast sandbox
+app.all('/subscriptions/:token/:action', async (req, res) => {
+  const action = req.params.action;
+  if (!subscriptionActions.has(action)) return res.status(404).json({ error: 'unknown action' });
+  return forwardToPayfast(req, res, action);
+});
 
 // Function to verify PayFast signature
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -285,39 +375,7 @@ app.post('/payfast/webhook', async (req, res) => {
   }
 });
 
-// Create subscription intent (server-side pending subscription)
-app.post('/subscriptions/create-intent', async (req, res) => {
-  try {
-    const { user_id, subscription_plan_id, end_date } = req.body;
-    if (!user_id || !subscription_plan_id) return res.status(400).json({ error: 'user_id and subscription_plan_id required' });
 
-  const insertPayload: Record<string, unknown> = {
-      user_id,
-      subscription_plan_id,
-      status: 'pending',
-      payment_method: 'payfast',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    if (end_date) insertPayload.end_date = end_date;
-
-    const { data, error } = await supabase
-      .from('user_subscriptions')
-      .insert(insertPayload)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating subscription intent:', error);
-      return res.status(500).json({ error: error.message || 'Failed to create intent' });
-    }
-
-    return res.json(data);
-  } catch (err) {
-    console.error('create-intent error:', err);
-    return res.status(500).json({ error: 'internal' });
-  }
-});
 
 // Helper: cancel other active subscriptions for a user (exclude optional id)
 async function cancelOtherActiveSubscriptions(userId: string, excludeId?: string) {
@@ -342,6 +400,99 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     service: 'PayFast Webhook Handler'
   });
+});
+
+// Payment return handler (success)
+app.get('/payment-return', async (req, res) => {
+  try {
+    const orderId = String(req.query.custom_str1 || req.query.order_id || '');
+    const paymentId = String(req.query.pf_payment_id || '');
+
+    console.log('Payment return:', { orderId, paymentId, query: req.query });
+
+    if (!orderId) {
+      return res.status(400).send('Missing order ID');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: 'processing',
+          payment_status: 'completed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (error) console.error('Error updating order:', error);
+    } catch (err) {
+      console.error('Error updating order (exception):', err);
+    }
+
+    const ua = String(req.headers['user-agent'] || '');
+    const isMobileRequest = ua.includes('Mobile');
+    const webAppUrl = process.env.WEB_APP_URL || 'https://your-web-app.com';
+
+    if (isMobileRequest) {
+      return res.redirect(`farmersbracket://payment-success?order_id=${orderId}&pf_payment_id=${paymentId}`);
+    }
+
+    return res.redirect(`${webAppUrl}/payment-success?order_id=${orderId}&pf_payment_id=${paymentId}`);
+  } catch (error) {
+    console.error('Payment return error:', error);
+    res.status(500).send('Error processing payment return');
+  }
+});
+
+// Payment cancel handler
+app.get('/payment-cancel', async (req, res) => {
+  try {
+    const orderId = String(req.query.custom_str1 || req.query.order_id || '');
+    console.log('Payment cancelled:', { orderId, query: req.query });
+
+    if (orderId) {
+      try {
+        await supabase
+          .from('orders')
+          .update({ status: 'cancelled', payment_status: 'cancelled', updated_at: new Date().toISOString() })
+          .eq('id', orderId);
+      } catch (err) {
+        console.error('Error updating cancelled order:', err);
+      }
+    }
+
+    const ua = String(req.headers['user-agent'] || '');
+    const isMobileRequest = ua.includes('Mobile');
+    const webAppUrl = process.env.WEB_APP_URL || 'https://your-web-app.com';
+
+    if (isMobileRequest) {
+      return res.redirect(`farmersbracket://payment-cancelled?order_id=${orderId}`);
+    }
+
+    return res.redirect(`${webAppUrl}/payment-cancelled?order_id=${orderId}`);
+  } catch (error) {
+    console.error('Payment cancel error:', error);
+    res.status(500).send('Error processing payment cancellation');
+  }
+});
+
+// Status check endpoint for mobile app
+app.get('/payment-status/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('id, status, payment_status, total')
+      .eq('id', orderId)
+      .single();
+
+    if (error || !order) return res.status(404).json({ error: 'Order not found' });
+
+    return res.json({ orderId: order.id, status: order.status, paymentStatus: order.payment_status, total: order.total });
+  } catch (error) {
+    console.error('Status check error:', error);
+    res.status(500).json({ error: 'Error checking payment status' });
+  }
 });
 
 app.listen(PORT, () => {

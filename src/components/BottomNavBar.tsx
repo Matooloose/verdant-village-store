@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -7,6 +7,29 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, Package, CheckCircle, Truck, Clock, Home, ShoppingCart, MessageCircle, Search } from "lucide-react";
+
+// Strongly-typed shapes for orders fetched from Supabase
+type ProductSummary = {
+  name?: string;
+  images?: string[];
+};
+
+type OrderItem = {
+  // Supabase may return a single products object or an array depending on join shape,
+  // accept either to avoid type mismatches when assigning fetched rows directly.
+  products?: ProductSummary | ProductSummary[];
+};
+
+type Order = {
+  id: string;
+  status: string;
+  total?: number;
+  created_at?: string;
+  order_items?: OrderItem[];
+  payment_status?: string;
+  // Supabase shipping_address may be a JSON object or a string; accept both
+  shipping_address?: Record<string, unknown> | string | null;
+};
 
 const bottomNavItems = [
   { icon: Home, label: "Home", path: "/dashboard" },
@@ -51,11 +74,14 @@ function getStatusIconTrack(status: string) {
 
 const BottomNavBar: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { getTotalItems } = useCart();
   const [trackOrdersOpen, setTrackOrdersOpen] = useState(false);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+
+  
 
   useEffect(() => {
     if (trackOrdersOpen && user?.id) {
@@ -67,7 +93,8 @@ const BottomNavBar: React.FC = () => {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .then(({ data }) => {
-            setOrders(data || []);
+            // supabase returns a wide shape; cast to our Order[] type for state assignment
+            setOrders((data as unknown as Order[]) || []);
             setOrdersLoading(false);
           });
       });
@@ -75,6 +102,18 @@ const BottomNavBar: React.FC = () => {
   }, [trackOrdersOpen, user]);
 
   const undeliveredOrders = orders.filter(order => undeliveredStatuses.includes(order.status));
+
+  // Hide bottom nav on auth-related screens explicitly so pages that import
+  // BottomNavBar directly don't show it. Keep in sync with App.tsx hide list.
+  const hideOn = new Set([
+    '/',
+    '/login',
+    '/register',
+    '/reset-password',
+    '/forgot-password',
+    '/auth/reset'
+  ]);
+  if (hideOn.has(location.pathname)) return null;
 
   return (
     <>
@@ -86,37 +125,37 @@ const BottomNavBar: React.FC = () => {
               return (
                 <Button
                   key={item.path}
-                  variant={trackOrdersOpen ? "default" : isActive ? "default" : "ghost"}
+                  variant="ghost"
                   size="sm"
-                  className={`flex flex-col items-center px-3 py-2 h-auto ${trackOrdersOpen || isActive ? "text-primary font-bold bg-green-500/30" : "text-muted-foreground"}`}
+                  className={`flex flex-col items-center px-3 py-2 h-auto text-muted-foreground`}
                   onClick={() => setTrackOrdersOpen(true)}
                   aria-label="Track Orders"
                 >
-                  <div className="relative">
-                    <item.icon className="h-5 w-5 mb-1" />
+                  <div className={`relative flex items-center justify-center transition-all`}>
+                    <item.icon className={`h-5 w-5 mb-1 ${trackOrdersOpen || isActive ? 'text-primary' : 'text-current'}`} />
                   </div>
-                  <span className="text-xs">Track</span>
+                  <span className={`text-xs transition-colors ${trackOrdersOpen || isActive ? 'text-primary font-semibold' : ''}`}>Track</span>
                 </Button>
               );
             }
             return (
               <Button
                 key={item.path}
-                variant={isActive ? "default" : "ghost"}
+                variant="ghost"
                 size="sm"
-                className={`flex flex-col items-center px-3 py-2 h-auto ${isActive ? "text-primary font-bold bg-green-500/30" : "text-muted-foreground"}`}
+                className={`flex flex-col items-center px-3 py-2 h-auto text-muted-foreground`}
                 onClick={() => navigate(item.path)}
                 aria-label={`Navigate to ${item.label}`}
               >
-                <div className="relative">
-                  <item.icon className="h-5 w-5 mb-1" />
+                <div className={`relative flex items-center justify-center transition-all`}>
+                  <item.icon className={`h-5 w-5 mb-1 ${isActive ? 'text-primary' : 'text-current'}`} />
                   {item.label === "Cart" && getTotalItems() > 0 && (
                     <Badge className="absolute -top-2 -right-2 text-xs px-1 py-0.5 rounded-full bg-primary text-white">
                       {getTotalItems()}
                     </Badge>
                   )}
                 </div>
-                <span className="text-xs">{item.label}</span>
+                <span className={`text-xs transition-colors ${isActive ? 'text-primary font-semibold' : ''}`}>{item.label}</span>
               </Button>
             );
           })}

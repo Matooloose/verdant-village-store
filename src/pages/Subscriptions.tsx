@@ -35,9 +35,8 @@ interface UserSubscription {
 }
 
 const Subscriptions = () => {
-  // Base URL for the PayFast/webhook helper service. Set VITE_PAYFAST_SERVER_URL in your env
-  // to point to the running webhook server (e.g. http://localhost:3002). Defaults to localhost:3002
-  // for local development.
+
+  // Prefer env var, fallback to local helper used by this repo for PayFast testing
   const PAYFAST_API_BASE = (import.meta.env.VITE_PAYFAST_SERVER_URL as string) || 'http://localhost:3002';
 
   const navigate = useNavigate();
@@ -155,39 +154,15 @@ const Subscriptions = () => {
       return;
     }
 
-    // Create a pending subscription intent server-side so the client can't tamper with plan ids
-    let pendingSubId: string | null = null;
+    // Confirm with user then initiate PayFast directly using the remote payfast-url service
     try {
-      const endDate = plan.duration_months > 0 
-        ? new Date(Date.now() + plan.duration_months * 30 * 24 * 60 * 60 * 1000).toISOString()
-        : null;
+      const confirmed = window.confirm(`Subscribe to ${plan.name} for ${formatPrice(plan.price)}?`);
+      if (!confirmed) return;
 
-      const res = await fetch(`${PAYFAST_API_BASE}/subscriptions/create-intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id, subscription_plan_id: planId, end_date: endDate })
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Failed to create intent: ${res.status}`);
-      }
-
-      const json = await res.json();
-      pendingSubId = json?.id;
-      if (!pendingSubId) throw new Error('No intent id returned');
-    } catch (err) {
-      console.error('Failed to create pending subscription intent:', err);
-      toast({ title: 'Error', description: 'Could not start subscription. Please try again.', variant: 'destructive' });
-      return;
-    }
-
-    // Initiate PayFast payment for the subscription via the same payfast-url service used in checkout
-    try {
       const isMobile = Capacitor.isNativePlatform();
       const returnUrl = isMobile
         ? 'https://matooloose.github.io/page_for_redirection/index.html'
-        : window.location.origin + '/subscriptions';
+        : window.location.origin + '/payment-success';
       const cancelUrl = window.location.origin + '/subscriptions';
 
       const subscriptionOption = plan.duration_months === 0 ? 'one_time' : plan.duration_months === 1 ? 'monthly' : plan.duration_months === 12 ? 'annual' : 'one_time';
@@ -196,17 +171,17 @@ const Subscriptions = () => {
         amount: plan.price.toFixed(2),
         item_name: plan.name,
         item_description: plan.description || plan.name,
-        return_url: returnUrl,
+        return_url: `${returnUrl}?plan_id=${plan.id}`,
         cancel_url: cancelUrl,
         notify_url: 'https://paying-project.onrender.com/payfast-webhook',
-        // correlate subscription id and user id
-        custom_str1: pendingSubId,
+        // Pass plan id and user id so webhook can reconcile
+        custom_str1: plan.id,
         custom_str2: user.id,
         subscription_type: 'chat',
         subscription_option: subscriptionOption,
       };
 
-      console.log('Requesting PayFast URL for subscription:', body);
+      console.log('Requesting PayFast URL for subscription (direct):', body);
 
       const res = await fetch('https://paying-project.onrender.com/payfast-url', {
         method: 'POST',
@@ -224,6 +199,9 @@ const Subscriptions = () => {
       const data = await res.json();
       if (!data.url) throw new Error('PayFast URL generation failed - no URL returned');
 
+      // Persist plan intent for fallback if needed
+      try { localStorage.setItem('pending_subscription_plan', plan.id); } catch (e) { /* ignore */ }
+
       if (isMobile) {
         await Browser.open({ url: data.url });
       } else {
@@ -231,10 +209,11 @@ const Subscriptions = () => {
       }
 
       toast({ title: 'Processing Payment', description: 'Please complete the payment in the new window.' });
+      return;
     } catch (err) {
-      console.error('Error initiating PayFast subscription:', err);
+      console.error('Error initiating PayFast subscription (direct):', err);
       toast({ title: 'Payment Error', description: 'Failed to start payment. Please try again.', variant: 'destructive' });
-      // Optionally leave the pending subscription for manual cleanup or show retry
+      return;
     }
   };
 
@@ -251,7 +230,8 @@ const Subscriptions = () => {
 
     try {
       // Call server-side RPC to cancel subscription (enforces ownership and logs event)
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('cancel_subscription', {
+      // First try: call the DB RPC which performs ownership checks and logs the cancellation
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('cancel_subscription_rpc', {
         _user_id: user.id,
         _subscription_id: userSubscription.id,
         _reason: 'user_request',
@@ -260,21 +240,42 @@ const Subscriptions = () => {
 
       if (rpcError) {
         console.error('RPC cancel_subscription error:', rpcError);
-        toast({ title: 'Cancel failed', description: rpcError.message || 'Unable to cancel subscription', variant: 'destructive' });
-        return;
+
+        // If the RPC failed with an ambiguous column reference or similar DB-side issue,
+        // attempt a best-effort client-side cancellation as a fallback (may be blocked by RLS).
+        const isAmbiguous = rpcError.code === '42702' || (rpcError.details || '').toLowerCase().includes('ambiguous');
+        if (isAmbiguous) {
+          console.warn('RPC returned ambiguous column error; attempting client-side update fallback');
+          try {
+            const { data: updData, error: updErr } = await supabase
+              .from('user_subscriptions')
+              .update({ status: 'cancelled' })
+              .eq('id', userSubscription.id)
+              .select()
+              .maybeSingle();
+
+            if (updErr) {
+              console.error('Client-side cancel fallback failed:', updErr);
+              toast({ title: 'Cancel failed', description: updErr.message || 'Unable to cancel subscription', variant: 'destructive' });
+              return;
+            }
+
+            toast({ title: 'Subscription cancelled', description: 'Your subscription has been cancelled (client-side)' });
+            setUserSubscription(null);
+          } catch (e) {
+            console.error('Client-side cancel fallback exception:', e);
+            toast({ title: 'Cancel failed', description: 'Unable to cancel subscription', variant: 'destructive' });
+            return;
+          }
+        } else {
+          toast({ title: 'Cancel failed', description: rpcError.message || 'Unable to cancel subscription', variant: 'destructive' });
+          return;
+        }
+      } else {
+        // RPC succeeded
+        toast({ title: 'Subscription cancelled', description: 'Your subscription has been cancelled' });
+        setUserSubscription(null);
       }
-
-      // RPC returns a rowset; when called via supabase.rpc it often returns an array or object depending on function signature
-      // We'll consider a successful response as truthy rpcResult
-      if (!rpcResult) {
-        toast({ title: 'Cancel failed', description: 'Unexpected server response', variant: 'destructive' });
-        return;
-      }
-
-      toast({ title: 'Subscription cancelled', description: 'Your subscription has been cancelled' });
-
-      // Refresh local state and UI
-      setUserSubscription(null);
       // Notify other open pages/components that subscription changed so they can revoke access immediately
       try {
         const ev = new CustomEvent('subscription:changed', { detail: { id: userSubscription.id, status: 'cancelled' } });
@@ -319,7 +320,7 @@ const Subscriptions = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 bg-card border-b">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center">
               <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -346,7 +347,7 @@ const Subscriptions = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b shadow-sm">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-sm">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { App as CapApp } from '@capacitor/app';
@@ -12,7 +12,9 @@ import { Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { CartProvider } from "./contexts/CartContext";
 import { AppStateProvider } from "./contexts/AppStateContext";
+import { useAppState } from './contexts/AppStateContext';
 import { WishlistProvider } from "./contexts/WishlistContext";
+import BottomNavBar from "./components/BottomNavBar";
 
 // Lazy load pages for better performance
 const Index = React.lazy(() => import("./pages/Index"));
@@ -95,6 +97,15 @@ const DeepLinkHandler = () => {
 };
 
 const App = () => {
+  const location = useLocation();
+  const hideBottomNavPaths = new Set([
+    '/',
+    '/login',
+    '/register',
+    '/reset-password',
+    '/forgot-password',
+    '/auth/reset'
+  ]);
   // Apply persisted theme on app mount so dark mode survives redirects/reloads
   React.useEffect(() => {
     try {
@@ -109,16 +120,36 @@ const App = () => {
       console.warn('Could not apply persisted theme', e);
     }
   }, []);
+
+  // Helper component to mark a notification as read after route changes.
+  const NotificationRouteSync: React.FC = () => {
+    const { lastClickedNotificationId, markNotificationAsRead, clearLastClickedNotificationId } = useAppState();
+    const loc = useLocation();
+
+    useEffect(() => {
+      if (lastClickedNotificationId && markNotificationAsRead) {
+        // mark read once route changes
+        markNotificationAsRead(lastClickedNotificationId);
+        if (clearLastClickedNotificationId) clearLastClickedNotificationId();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loc.pathname]);
+
+    return null;
+  };
   return (
     <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <AuthProvider>
         <AppStateProvider>
+          <NotificationRouteSync />
           <CartProvider>
             <WishlistProvider>
-              <Toaster />
-              <Sonner />
-              <ErrorBoundary>
+      <Toaster />
+      <Sonner />
+    {/* Ensure content has bottom padding so fixed BottomNavBar doesn't overlap page content */}
+  <div className="pb-[calc(72px+env(safe-area-inset-bottom))]">
+    <ErrorBoundary>
                   <DeepLinkHandler />
                   <Suspense fallback={
                     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -170,8 +201,13 @@ const App = () => {
                       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                       <Route path="*" element={<NotFound />} />
                     </Routes>
-                  </Suspense>
-              </ErrorBoundary>
+          </Suspense>
+          {/* Global bottom navigation for mobile/compact layouts */}
+          {/* Render BottomNavBar once so it's visible on all pages */}
+        </ErrorBoundary>
+    </div>
+  {/* Bottom navigation visible across routes except auth screens */}
+  {!hideBottomNavPaths.has(location.pathname) && <BottomNavBar />}
             </WishlistProvider>
           </CartProvider>
         </AppStateProvider>

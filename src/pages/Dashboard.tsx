@@ -609,17 +609,47 @@ const loadUserActivity = useCallback(async () => {
 
 // Track product view
 const trackProductView = useCallback((product: Product) => {
-  if (!user) return;
+  if (!user || !product || !product.id) return;
 
   const storageKey = `recently_viewed_${user.id}`;
-  const recentlyViewed = JSON.parse(localStorage.getItem(storageKey) || '[]');
-  
-  // Remove if already exists and add to front
-  const filtered = recentlyViewed.filter((p: Product) => p.id !== product.id);
-  const updated = [product, ...filtered].slice(0, 10); // Keep last 10
-  
-  localStorage.setItem(storageKey, JSON.stringify(updated));
+  const raw = localStorage.getItem(storageKey) || '[]';
+  let recentlyViewed: Product[] = [];
+  try {
+    recentlyViewed = JSON.parse(raw) || [];
+  } catch (e) {
+    recentlyViewed = [];
+  }
+
+  // Normalize product shape to avoid accidental object identity or nested issues
+  const normalized: Product = {
+    id: String(product.id),
+    name: String(product.name ?? ''),
+    description: product.description ?? null,
+    price: typeof product.price === 'number' ? product.price : Number(product.price ?? 0),
+    unit: String(product.unit ?? 'each'),
+    category: String(product.category ?? 'General'),
+    images: Array.isArray(product.images) ? product.images : (product.images ? [String(product.images)] : []),
+    is_organic: Boolean(product.is_organic),
+    is_featured: Boolean(product.is_featured),
+    farmer_id: String(product.farmer_id ?? ''),
+    quantity: typeof product.quantity === 'number' ? product.quantity : Number(product.quantity ?? 0),
+  };
+
+  // Remove existing occurrence of same id
+  const filtered = recentlyViewed.filter((p: Product) => String(p.id) !== String(normalized.id));
+
+  // Prepend and cap to 5 most recent
+  const updated = [normalized, ...filtered].slice(0, 5);
+
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+  } catch (e) {
+    console.warn('Failed to persist recently viewed', e);
+  }
+
+  // Update local state (both activity and recentlyViewedProducts) so UI reflects change immediately
   setUserActivity(prev => ({ ...prev, recently_viewed: updated }));
+  setRecentlyViewedProducts(updated);
 }, [user]);
 
 // Fetch functions
@@ -631,8 +661,14 @@ const fetchRecommendations = useCallback(async () => {
 const fetchRecentlyViewed = useCallback(() => {
   if (!user) return;
   const storageKey = `recently_viewed_${user.id}`;
-  const recentlyViewed = JSON.parse(localStorage.getItem(storageKey) || '[]');
-  setRecentlyViewedProducts(recentlyViewed.slice(0, 6));
+  let recentlyViewed: Product[] = [];
+  try {
+    recentlyViewed = JSON.parse(localStorage.getItem(storageKey) || '[]') || [];
+  } catch (e) {
+    recentlyViewed = [];
+  }
+  // Ensure we only show up to 5 most recent products
+  setRecentlyViewedProducts(recentlyViewed.slice(0, 5));
 }, [user]);
 
 const fetchPersonalizedFarms = useCallback(async () => {
@@ -1003,7 +1039,7 @@ useEffect(() => {
       />
       
       {/* Top App Bar */}
-      <header className="sticky top-0 z-50 bg-card border-b shadow-soft" role="banner">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-soft" role="banner">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center space-x-3">
             <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
@@ -1547,7 +1583,7 @@ useEffect(() => {
                                 R{product.price}/{product.unit}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {product.quantity} {product.unit} available
+                                {product.quantity} items available
                               </p>
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
@@ -1639,7 +1675,7 @@ useEffect(() => {
                                   R{product.price}/{product.unit}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  {product.quantity} {product.unit} available
+                                  {product.quantity} items available
                                 </p>
                                 {product.is_organic && (
                                   <Badge variant="secondary" className="text-xs">Organic</Badge>

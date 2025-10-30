@@ -1,0 +1,1 @@
+function n(t){if(!t)return"Unknown error";if(typeof t=="string")return t;if(t instanceof Error)return t.message;try{const r=t;if(r!=null&&r.message)return String(r.message);if(r!=null&&r.error)return String(r.error);if(typeof r=="object")return JSON.stringify(r)}catch{}return String(t)}export{n as g};

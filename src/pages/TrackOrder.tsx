@@ -359,7 +359,7 @@ const TrackOrder = () => {
   if (!order) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 bg-card border-b shadow-sm">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-sm">
           <div className="p-4 flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate('/order-history')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -396,7 +396,7 @@ const TrackOrder = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 bg-card border-b shadow-sm">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-sm">
         <div className="p-4 flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate('/order-history')}>
             <ArrowLeft className="h-4 w-4 mr-2" />

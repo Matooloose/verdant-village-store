@@ -78,7 +78,8 @@ const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
       
       <SheetContent side="right" className="w-80 overflow-y-auto">
         <SheetHeader>
-          <div className="flex items-center justify-between">
+          {/* Add right padding so the shared sheet close (X) button does not overlap the header actions */}
+          <div className="flex items-center justify-between pr-12">
             <SheetTitle>Filters</SheetTitle>
             {hasActiveFilters && (
               <Button 

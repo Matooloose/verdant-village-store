@@ -251,7 +251,7 @@ const FarmDetail: React.FC = () => {
   if (!farm) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <header className="sticky top-0 z-50 bg-card border-b shadow-sm">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-sm">
           <div className="flex items-center gap-4 p-4">
             <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
               <ArrowLeft className="h-5 w-5" />
@@ -290,7 +290,7 @@ const FarmDetail: React.FC = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card border-b shadow-sm">
+  <header className="page-topbar sticky top-0 z-50 bg-card border-b shadow-sm">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>

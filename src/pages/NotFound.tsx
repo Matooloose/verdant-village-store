@@ -507,7 +507,7 @@ const NotFound = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
       {/* Fun Header with Interactive Elements */}
-  <header className="relative overflow-hidden bg-card border-b border-border shadow-sm">
+  <header className="page-topbar sticky top-0 z-50 overflow-hidden bg-card border-b border-border shadow-sm">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-100/20 to-green-100/20" />
         
         <div className="container mx-auto px-4 py-6 relative">

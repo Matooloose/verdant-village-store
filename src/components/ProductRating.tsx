@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Star, ThumbsUp, ThumbsDown, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -36,11 +36,7 @@ export const ProductRating: React.FC<ProductRatingProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadReviews();
-  }, [productId]);
-
-  const loadReviews = async () => {
+  const loadReviews = useCallback(async () => {
     try {
       setLoading(true);
       const [reviewsData, statsData] = await Promise.all([
@@ -49,17 +45,22 @@ export const ProductRating: React.FC<ProductRatingProps> = ({
       ]);
       setReviews(reviewsData);
       setStats(statsData);
-    } catch (error) {
-      console.error('Error loading reviews:', error);
+    } catch (err) {
+      console.error('Error loading reviews:', err);
+      const msg = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error loading reviews",
-        description: "Please try again later",
+        description: msg || "Please try again later",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [productId, toast]);
+
+  useEffect(() => {
+    loadReviews();
+  }, [loadReviews]);
 
   const handleSubmitReview = async () => {
     if (rating === 0) {
@@ -94,10 +95,11 @@ export const ProductRating: React.FC<ProductRatingProps> = ({
         title: "Review submitted",
         description: "Thank you for your feedback!",
       });
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error submitting review",
-        description: error.message || "Please try again later",
+        description: msg || "Please try again later",
         variant: "destructive",
       });
     } finally {
@@ -196,42 +198,45 @@ export const ProductRating: React.FC<ProductRatingProps> = ({
                   Write Review
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="w-full max-w-md sm:max-w-lg max-h-[75vh] overflow-hidden">
                 <DialogHeader>
                   <DialogTitle>Write a Review</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label>Your rating *</Label>
-                    <div className="flex gap-1 mt-1">
-                      {renderStars(rating, true, 'w-8 h-8')}
+                <div className="px-0">
+                  <div className="max-h-[calc(75vh-6rem)] overflow-y-auto space-y-4 p-2">
+                    <div>
+                      <Label>Your rating *</Label>
+                      <div className="flex gap-1 mt-1">
+                        {renderStars(rating, true, 'w-8 h-8')}
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="review-title">Title (optional)</Label>
+                      <Input
+                        id="review-title"
+                        placeholder="Summarize your experience"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        maxLength={100}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="review-comment">Review (optional)</Label>
+                      <Textarea
+                        id="review-comment"
+                        placeholder="Share your thoughts about this product..."
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        rows={6}
+                        maxLength={1000}
+                      />
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {comment.length}/1000 characters
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <Label htmlFor="review-title">Title (optional)</Label>
-                    <Input
-                      id="review-title"
-                      placeholder="Summarize your experience"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      maxLength={100}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="review-comment">Review (optional)</Label>
-                    <Textarea
-                      id="review-comment"
-                      placeholder="Share your thoughts about this product..."
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      rows={4}
-                      maxLength={1000}
-                    />
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {comment.length}/1000 characters
-                    </div>
-                  </div>
-                  <div className="flex gap-2 justify-end">
+
+                  <div className="sticky bottom-0 bg-gradient-to-t from-background/80 to-transparent p-3 flex gap-2 justify-end">
                     <Button 
                       variant="outline" 
                       onClick={() => setIsDialogOpen(false)}
@@ -342,6 +347,47 @@ export const ProductRating: React.FC<ProductRatingProps> = ({
               <DialogTrigger asChild>
                 <Button>Write the first review</Button>
               </DialogTrigger>
+              <DialogContent className="w-full max-w-md sm:max-w-lg max-h-[75vh] overflow-hidden">
+                <DialogHeader>
+                  <DialogTitle>Write a Review</DialogTitle>
+                </DialogHeader>
+                <div className="max-h-[calc(75vh-6rem)] overflow-y-auto space-y-4 p-2">
+                  <div>
+                    <Label>Your rating *</Label>
+                    <div className="flex gap-1 mt-1">
+                      {renderStars(rating, true, 'w-8 h-8')}
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="review-title">Title (optional)</Label>
+                    <Input
+                      id="review-title"
+                      placeholder="Summarize your experience"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      maxLength={100}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="review-comment">Review (optional)</Label>
+                    <Textarea
+                      id="review-comment"
+                      placeholder="Share your thoughts about this product..."
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      rows={6}
+                      maxLength={1000}
+                    />
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {comment.length}/1000 characters
+                    </div>
+                  </div>
+                </div>
+                <div className="sticky bottom-0 bg-gradient-to-t from-background/80 to-transparent p-3 flex gap-2 justify-end">
+                  <Button onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleSubmitReview} disabled={rating === 0 || submitting}>{submitting ? 'Submitting...' : 'Submit Review'}</Button>
+                </div>
+              </DialogContent>
             </Dialog>
           </CardContent>
         </Card>
